@@ -386,8 +386,9 @@ function withTimeout(promise, ms=20000){
 }
 
 async function apiGet(action){
-  const url = `${APPS_SCRIPT_URL}?action=${action}&token=${APPS_SCRIPT_TOKEN}`;
-  const res = await withTimeout(fetch(url));
+  const cacheBust = Date.now() + '-' + Math.random().toString(36).slice(2);
+  const url = `${APPS_SCRIPT_URL}?action=${action}&token=${APPS_SCRIPT_TOKEN}&_=${cacheBust}`;
+  const res = await withTimeout(fetch(url, { cache: 'no-store' }));
   const json = await res.json();
   if(json.error) throw new Error(json.error);
   return json.data;
@@ -409,6 +410,7 @@ async function apiGetWithRetry(action, retries=2){
 async function apiPost(action, data){
   const res = await withTimeout(fetch(APPS_SCRIPT_URL, {
     method: 'POST',
+    cache: 'no-store',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS
     body: JSON.stringify({ action, data, token: APPS_SCRIPT_TOKEN })
   }));
