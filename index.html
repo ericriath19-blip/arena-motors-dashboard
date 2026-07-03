@@ -367,6 +367,10 @@ const SHOPPINGS = [
 let state = { config: [], entries: [] };
 let barChart, lineChart;
 
+// ---------- BACKEND: Google Apps Script (Google Sheets) ----------
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4-Hjg_fKyrhAKlPfHJ2wWWYq99QkVpH_Z4aVzu9TTtjihfzdhxU4sBF3cq-P-CFvNPw/exec';
+const APPS_SCRIPT_TOKEN = '20ae7f792d18525b37182be5afcda2b6';
+
 function withTimeout(promise, ms=8000){
   return Promise.race([
     promise,
@@ -374,29 +378,60 @@ function withTimeout(promise, ms=8000){
   ]);
 }
 
+async function apiGet(action){
+  const url = `${APPS_SCRIPT_URL}?action=${action}&token=${APPS_SCRIPT_TOKEN}`;
+  const res = await withTimeout(fetch(url));
+  if(!res) return null;
+  const json = await res.json();
+  if(json.error) throw new Error(json.error);
+  return json.data;
+}
+
+async function apiPost(action, data){
+  const res = await withTimeout(fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS
+    body: JSON.stringify({ action, data, token: APPS_SCRIPT_TOKEN })
+  }));
+  if(!res) throw new Error('timeout');
+  const json = await res.json();
+  if(json.error) throw new Error(json.error);
+  return json;
+}
+
+function normalizeConfigRow(p){
+  return { id: String(p.id), name: String(p.name), fee: Number(p.fee||0), promised: Number(p.promised||0) };
+}
+function normalizeEntryRow(e){
+  return {
+    id: String(e.id), shoppingId: String(e.shoppingId), portalId: String(e.portalId),
+    date: String(e.date), portalLeads: Number(e.portalLeads||0), crmLeads: Number(e.crmLeads||0)
+  };
+}
+
 async function loadState(){
   try{
-    const c = await withTimeout(window.storage.get('config', true));
-    state.config = c ? JSON.parse(c.value) : null;
-  }catch(e){ state.config = null; }
-  if(!state.config){
+    const c = await apiGet('config');
+    state.config = c ? c.map(normalizeConfigRow) : null;
+  }catch(e){ console.error('Erro ao carregar config', e); state.config = null; }
+  if(!state.config || state.config.length===0){
     state.config = DEFAULT_PORTALS;
     await saveConfig();
   }
 
   try{
-    const e = await withTimeout(window.storage.get('entries', true));
-    state.entries = e ? JSON.parse(e.value) : [];
-  }catch(e){ state.entries = []; }
+    const e = await apiGet('entries');
+    state.entries = e ? e.map(normalizeEntryRow) : [];
+  }catch(e){ console.error('Erro ao carregar lançamentos', e); state.entries = []; }
 }
 
 async function saveConfig(){
-  try{ await withTimeout(window.storage.set('config', JSON.stringify(state.config), true)); }
-  catch(e){ console.error('Erro ao salvar config', e); }
+  try{ await apiPost('saveConfig', state.config); }
+  catch(e){ showFatalError('Erro ao salvar config: ' + e.message); }
 }
 async function saveEntries(){
-  try{ await withTimeout(window.storage.set('entries', JSON.stringify(state.entries), true)); }
-  catch(e){ console.error('Erro ao salvar lançamentos', e); }
+  try{ await apiPost('saveEntries', state.entries); }
+  catch(e){ showFatalError('Erro ao salvar lançamentos: ' + e.message); }
 }
 
 // ---------- TABS ----------
