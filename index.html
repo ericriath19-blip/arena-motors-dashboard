@@ -393,6 +393,19 @@ async function apiGet(action){
   return json.data;
 }
 
+async function apiGetWithRetry(action, retries=2){
+  let lastErr;
+  for(let i=0; i<=retries; i++){
+    try{
+      return await apiGet(action);
+    }catch(e){
+      lastErr = e;
+      if(i < retries) await new Promise(r=>setTimeout(r, 1500));
+    }
+  }
+  throw lastErr;
+}
+
 async function apiPost(action, data){
   const res = await withTimeout(fetch(APPS_SCRIPT_URL, {
     method: 'POST',
@@ -415,19 +428,39 @@ function normalizeEntryRow(e){
 }
 
 async function loadState(){
+  let configFailed = false;
+  let entriesFailed = false;
+
   try{
-    const c = await apiGet('config');
-    state.config = c ? c.map(normalizeConfigRow) : null;
-  }catch(e){ console.error('Erro ao carregar config', e); state.config = null; }
-  if(!state.config || state.config.length===0){
+    const c = await apiGetWithRetry('config');
+    state.config = c ? c.map(normalizeConfigRow) : [];
+  }catch(e){
+    console.error('Erro ao carregar config', e);
+    configFailed = true;
+    state.config = [];
+  }
+
+  if(configFailed){
+    // FALHA DE REDE: nunca regravar a planilha nesse caso, só avisar e usar padrão só na tela
+    showFatalError('Não foi possível carregar a configuração dos portais (falha de conexão). Os dados salvos NÃO foram alterados. Recarregue a página em alguns segundos.');
+    state.config = DEFAULT_PORTALS;
+  } else if(state.config.length === 0){
+    // Backend confirmou vazio de verdade (primeira vez) -> aí sim semeia o padrão
     state.config = DEFAULT_PORTALS;
     await saveConfig();
   }
 
   try{
-    const e = await apiGet('entries');
+    const e = await apiGetWithRetry('entries');
     state.entries = e ? e.map(normalizeEntryRow) : [];
-  }catch(e){ console.error('Erro ao carregar lançamentos', e); state.entries = []; }
+  }catch(e){
+    console.error('Erro ao carregar lançamentos', e);
+    entriesFailed = true;
+    state.entries = [];
+    showFatalError('Não foi possível carregar os lançamentos (falha de conexão). Recarregue a página em alguns segundos.');
+  }
+
+  state._loadFailed = configFailed || entriesFailed;
 }
 
 async function saveConfig(){
