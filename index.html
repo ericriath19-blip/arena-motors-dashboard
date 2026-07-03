@@ -371,17 +371,23 @@ let barChart, lineChart;
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4-Hjg_fKyrhAKlPfHJ2wWWYq99QkVpH_Z4aVzu9TTtjihfzdhxU4sBF3cq-P-CFvNPw/exec';
 const APPS_SCRIPT_TOKEN = '20ae7f792d18525b37182be5afcda2b6';
 
-function withTimeout(promise, ms=8000){
-  return Promise.race([
-    promise,
-    new Promise((resolve)=> setTimeout(()=>resolve(null), ms))
-  ]);
+function withTimeout(promise, ms=20000){
+  let timeoutId;
+  const timeoutPromise = new Promise((resolve)=>{
+    timeoutId = setTimeout(()=> resolve('__TIMEOUT__'), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).then((result)=>{
+    clearTimeout(timeoutId);
+    if(result === '__TIMEOUT__'){
+      throw new Error(`sem resposta do servidor em ${ms/1000}s (timeout)`);
+    }
+    return result;
+  });
 }
 
 async function apiGet(action){
   const url = `${APPS_SCRIPT_URL}?action=${action}&token=${APPS_SCRIPT_TOKEN}`;
   const res = await withTimeout(fetch(url));
-  if(!res) return null;
   const json = await res.json();
   if(json.error) throw new Error(json.error);
   return json.data;
@@ -393,7 +399,6 @@ async function apiPost(action, data){
     headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS
     body: JSON.stringify({ action, data, token: APPS_SCRIPT_TOKEN })
   }));
-  if(!res) throw new Error('timeout');
   const json = await res.json();
   if(json.error) throw new Error(json.error);
   return json;
