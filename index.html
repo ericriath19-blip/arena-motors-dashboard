@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Leads · Arena Motors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0a0a0a;
+    --surface:#141414;
+    --surface-2:#1c1c1c;
+    --border:#2c2c2c;
+    --text:#f5f5f0;
+    --text-muted:#9a9a92;
+    --text-dim:#5c5c56;
+    --good:#3ddc97;
+    --good-dim:#1f4d3d;
+    --warn:#ffe066;
+    --warn-dim:#4d4420;
+    --bad:#ff6b4a;
+    --bad-dim:#4d2a1f;
+    --accent:#ffd100;
+    --font-display:'Space Grotesk', sans-serif;
+    --font-body:'Inter', sans-serif;
+    --font-mono:'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--font-body);
+    padding:24px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px; margin:0 auto;}
+
+  /* AUTH GATE */
+  #authOverlay{
+    position:fixed; inset:0; background:var(--bg); z-index:9999;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .auth-box{
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:34px 28px; width:100%; max-width:320px; text-align:center;
+  }
+  .auth-icon{font-size:30px; margin-bottom:12px;}
+  .auth-box h2{font-family:var(--font-display); font-size:18px; font-weight:600; margin-bottom:8px;}
+  .auth-sub{font-size:12.5px; color:var(--text-muted); line-height:1.5; margin-bottom:20px;}
+  #authForm{display:flex; flex-direction:column; gap:10px;}
+  #authForm input{width:100%; text-align:center;}
+  #authForm button{margin-top:4px;}
+  .auth-error{color:var(--bad); font-size:12px; margin-top:12px; min-height:14px;}
+
+  /* HEADER */
+  header{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    flex-wrap:wrap; gap:16px;
+    border-bottom:1px solid var(--border);
+    padding-bottom:20px; margin-bottom:24px;
+  }
+  .eyebrow{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.14em;
+    color:var(--accent); text-transform:uppercase; margin-bottom:6px;
+  }
+  h1{font-family:var(--font-display); font-size:28px; font-weight:700; letter-spacing:-0.01em;}
+  .storage-note{
+    font-size:12px; color:var(--text-dim); font-family:var(--font-mono);
+    max-width:280px; text-align:right; line-height:1.5;
+  }
+
+  /* TABS */
+  nav.tabs{display:flex; gap:4px; margin-bottom:24px; border-bottom:1px solid var(--border);}
+  nav.tabs button{
+    background:none; border:none; color:var(--text-muted);
+    font-family:var(--font-body); font-weight:600; font-size:14px;
+    padding:10px 18px; cursor:pointer; border-bottom:2px solid transparent;
+    transition:all .15s ease;
+  }
+  nav.tabs button:hover{color:var(--text);}
+  nav.tabs button.active{color:var(--text); border-bottom-color:var(--accent);}
+
+  .tab-content{display:none;}
+  .tab-content.active{display:block; animation:fade .2s ease;}
+  @keyframes fade{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);}}
+
+  /* SUMMARY STRIP */
+  .summary-strip{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr));
+    gap:1px; background:var(--border);
+    border:1px solid var(--border); border-radius:12px; overflow:hidden;
+    margin-bottom:28px;
+  }
+  .summary-card{background:var(--surface); padding:16px 18px;}
+  .summary-card .label{font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px;}
+  .summary-card .value{font-family:var(--font-mono); font-size:22px; font-weight:600;}
+  .summary-card .value.good{color:var(--good);}
+  .summary-card .value.bad{color:var(--bad);}
+  .summary-card .sub{font-size:11px; color:var(--text-muted); margin-top:4px;}
+
+  /* MONTH SELECTOR */
+  .month-bar{display:flex; align-items:center; gap:10px; margin-bottom:20px;}
+  .month-bar label{font-size:12px; color:var(--text-muted); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.06em;}
+  select, input, button.primary, button.ghost{
+    font-family:var(--font-body); font-size:14px; color:var(--text);
+    background:var(--surface-2); border:1px solid var(--border);
+    border-radius:8px; padding:8px 12px; outline:none;
+  }
+  select{cursor:pointer;}
+  input:focus, select:focus{border-color:var(--accent);}
+
+  /* CARDS GRID */
+  .grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(300px,1fr)); gap:16px; margin-bottom:28px;}
+  .portal-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:18px;
+  }
+  .portal-card .pc-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
+  .portal-card h3{font-family:var(--font-display); font-size:16px; font-weight:600;}
+  .pill{font-family:var(--font-mono); font-size:10px; padding:3px 8px; border-radius:100px; text-transform:uppercase; letter-spacing:.05em;}
+  .pill.good{background:var(--good-dim); color:var(--good);}
+  .pill.warn{background:var(--warn-dim); color:var(--warn);}
+  .pill.bad{background:var(--bad-dim); color:var(--bad);}
+
+  .pc-body{display:flex; gap:16px; align-items:center;}
+  .donut{
+    width:76px; height:76px; border-radius:50%;
+    background:conic-gradient(var(--dc,var(--good)) calc(var(--dp,0)*1%), var(--surface-2) 0);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    position:relative;
+  }
+  .donut::before{
+    content:''; position:absolute; inset:8px; border-radius:50%; background:var(--surface);
+  }
+  .donut span{position:relative; font-family:var(--font-mono); font-size:14px; font-weight:600; color:var(--dc,var(--good));}
+  .pc-stats{flex:1; display:flex; flex-direction:column; gap:6px;}
+  .stat-row{display:flex; justify-content:space-between; font-size:12.5px;}
+  .stat-row .k{color:var(--text-muted);}
+  .stat-row .v{font-family:var(--font-mono); font-weight:600;}
+
+  .pc-fin{
+    margin-top:14px; padding-top:14px; border-top:1px solid var(--border);
+    display:grid; grid-template-columns:1fr 1fr; gap:10px;
+  }
+  .fin-item .k{font-size:10.5px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.05em; margin-bottom:3px;}
+  .fin-item .v{font-family:var(--font-mono); font-size:14px; font-weight:600;}
+
+  /* CHARTS */
+  .chart-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:20px; margin-bottom:20px;
+  }
+  .chart-card h3{font-family:var(--font-display); font-size:15px; margin-bottom:16px; font-weight:600;}
+  .chart-wrap{position:relative; height:280px;}
+
+  /* TABLES / FORMS */
+  .panel{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px; margin-bottom:20px;}
+  .panel h3{font-family:var(--font-display); font-size:15px; margin-bottom:16px; font-weight:600;}
+  form.inline-form{display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:18px;}
+  .field{display:flex; flex-direction:column; gap:5px;}
+  .field label{font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em;}
+  .field input, .field select{min-width:140px;}
+  button.primary{background:var(--accent); border-color:var(--accent); color:#0a0a0a; font-weight:700; cursor:pointer;}
+  button.primary:hover{filter:brightness(1.08);}
+  button.ghost{cursor:pointer; color:var(--text-muted);}
+  button.ghost:hover{color:var(--bad); border-color:var(--bad);}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th{text-align:left; color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:8px 10px; border-bottom:1px solid var(--border);}
+  td{padding:9px 10px; border-bottom:1px solid var(--border); font-family:var(--font-mono);}
+  td.name{font-family:var(--font-body);}
+  tr:hover td{background:var(--surface-2);}
+  td input{width:100%; background:transparent; border:1px solid transparent; color:var(--text); font-family:var(--font-mono); padding:4px 6px; border-radius:6px;}
+  td input:hover{border-color:var(--border);}
+  td input:focus{border-color:var(--accent); background:var(--surface-2);}
+  .empty-state{color:var(--text-dim); font-size:13px; padding:20px 0; text-align:center;}
+
+  .rank-list{display:flex; flex-direction:column; gap:8px;}
+  .rank-row{display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--surface-2); border-radius:8px;}
+  .rank-row .rn{font-family:var(--font-mono); color:var(--text-dim); width:18px;}
+  .rank-row .rname{flex:1; font-weight:600; font-size:13px;}
+  .rank-row .rbar-wrap{flex:2; height:6px; background:var(--border); border-radius:100px; overflow:hidden;}
+  .rank-row .rbar{height:100%; border-radius:100px;}
+  .rank-row .rval{font-family:var(--font-mono); font-size:12.5px; width:60px; text-align:right;}
+
+  @media (max-width:640px){
+    body{padding:14px;}
+    h1{font-size:22px;}
+    .storage-note{text-align:left;}
+    .pc-fin{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<div id="authOverlay">
+  <div class="auth-box">
+    <div class="auth-icon">🔒</div>
+    <h2 id="authTitle">Painel protegido</h2>
+    <p id="authSubtitle" class="auth-sub">Digite a senha de acesso para continuar.</p>
+    <form id="authForm" autocomplete="off">
+      <div style="position:relative;">
+        <input type="password" id="authPassword" name="arena-panel-pw-field" placeholder="Senha" autocomplete="new-password" spellcheck="false" required style="padding-right:38px;">
+        <button type="button" id="toggleAuthPw" aria-label="Mostrar senha" style="position:absolute; right:4px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-dim); font-size:16px; cursor:pointer; padding:4px 8px; width:auto;">👁</button>
+      </div>
+      <button type="submit" class="primary">Entrar</button>
+    </form>
+    <div id="authError" class="auth-error"></div>
+  </div>
+</div>
+
+<div class="wrap" style="display:none;">
+
+  <header>
+    <div>
+      <div class="eyebrow">Controle de funil · Portais → CRM</div>
+      <h1>Painel de Leads Arena Motors</h1>
+    </div>
+    <div class="storage-note">Dados salvos e compartilhados em tempo real com quem tiver este link. Qualquer pessoa da equipe pode lançar e editar.</div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+    <button class="tab-btn" data-tab="entries">Lançar dados</button>
+    <button class="tab-btn" data-tab="config">Configurar portais</button>
+  </nav>
+
+  <!-- DASHBOARD TAB -->
+  <div class="tab-content active" id="tab-dashboard">
+    <div class="month-bar">
+      <label>Período</label>
+      <select id="monthStart"></select>
+      <span style="color:var(--text-dim); font-family:var(--font-mono); font-size:12px;">até</span>
+      <select id="monthEnd"></select>
+      <span style="width:1px; height:20px; background:var(--border); margin:0 4px;"></span>
+      <label>Visão</label>
+      <select id="shoppingSelect"></select>
+    </div>
+
+    <div class="summary-strip" id="summaryStrip"></div>
+
+    <div class="grid" id="portalCards"></div>
+
+    <div class="chart-card">
+      <h3>Leads recebidos no portal x contabilizados no CRM (período selecionado)</h3>
+      <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Evolução de leads no CRM ao longo do tempo</h3>
+      <div class="chart-wrap"><canvas id="lineChart"></canvas></div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:1fr 1fr;">
+      <div class="panel">
+        <h3>Ranking · custo por lead (menor é melhor)</h3>
+        <div class="rank-list" id="rankCost"></div>
+      </div>
+      <div class="panel">
+        <h3>Ranking · cumprimento do prometido</h3>
+        <div class="rank-list" id="rankPromise"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ENTRIES TAB -->
+  <div class="tab-content" id="tab-entries">
+    <div class="panel">
+      <h3>Novo lançamento</h3>
+      <form class="inline-form" id="entryForm">
+        <div class="field">
+          <label>Shopping</label>
+          <select id="entryShopping" required></select>
+        </div>
+        <div class="field">
+          <label>Portal</label>
+          <select id="entryPortal" required></select>
+        </div>
+        <div class="field">
+          <label>Data</label>
+          <input type="date" id="entryDate" required>
+        </div>
+        <div class="field">
+          <label>Leads no portal</label>
+          <input type="number" id="entryPortalLeads" min="0" required style="min-width:90px;">
+        </div>
+        <div class="field">
+          <label>Leads no CRM</label>
+          <input type="number" id="entryCrmLeads" min="0" required style="min-width:90px;">
+        </div>
+        <button type="submit" class="primary">Adicionar</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h3>Lançamentos</h3>
+      <table id="entriesTable">
+        <thead>
+          <tr><th>Data</th><th>Shopping</th><th>Portal</th><th>Leads portal</th><th>Leads CRM</th><th>Divergência</th><th></th></tr>
+        </thead>
+        <tbody id="entriesBody"></tbody>
+      </table>
+      <div class="empty-state" id="entriesEmpty" style="display:none;">Nenhum lançamento ainda. Adicione o primeiro acima.</div>
+    </div>
+  </div>
+
+  <!-- CONFIG TAB -->
+  <div class="tab-content" id="tab-config">
+    <div class="panel">
+      <h3>Portais cadastrados</h3>
+      <table>
+        <thead>
+          <tr><th>Portal</th><th>Mensalidade (R$)</th><th>Leads prometidos/mês</th><th></th></tr>
+        </thead>
+        <tbody id="configBody"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3>Adicionar novo portal</h3>
+      <form class="inline-form" id="portalForm">
+        <div class="field">
+          <label>Nome</label>
+          <input type="text" id="newPortalName" required style="min-width:180px;">
+        </div>
+        <div class="field">
+          <label>Mensalidade (R$)</label>
+          <input type="number" id="newPortalFee" min="0" step="0.01" style="min-width:110px;">
+        </div>
+        <div class="field">
+          <label>Leads prometidos/mês</label>
+          <input type="number" id="newPortalPromised" min="0" style="min-width:110px;">
+        </div>
+        <button type="submit" class="primary">Adicionar portal</button>
+      </form>
+    </div>
+    <div class="panel">
+      <h3>Segurança</h3>
+      <p style="font-size:12.5px; color:var(--text-muted); line-height:1.6;">A senha de acesso ao painel é fixa, definida diretamente no código. Para trocá-la, peça ao Claude para atualizar o arquivo com a nova senha.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const fmtBRL = n => (n||0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+const fmtNum = n => (n||0).toLocaleString('pt-BR');
+const uid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36);
+
+const DEFAULT_PORTALS = [
+  {id:'site-proprio', name:'Site Próprio', fee:0, promised:0},
+  {id:'webmotors', name:'Webmotors', fee:0, promised:0},
+  {id:'olx', name:'OLX', fee:0, promised:0},
+  {id:'napista', name:'Na Pista', fee:0, promised:0},
+  {id:'usadosbr', name:'UsadosBR', fee:0, promised:0},
+  {id:'mobiauto', name:'Mobiauto', fee:0, promised:0},
+];
+
+const SHOPPINGS = [
+  {id:'arena-sul', name:'Arena Sul'},
+  {id:'arena-leste', name:'Arena Leste'},
+  {id:'arena-sto-andre', name:'Arena Sto. André'},
+  {id:'nacoes-unidas', name:'Nações Unidas'},
+];
+
+let state = { config: [], entries: [] };
+let barChart, lineChart;
+
+function withTimeout(promise, ms=8000){
+  return Promise.race([
+    promise,
+    new Promise((resolve)=> setTimeout(()=>resolve(null), ms))
+  ]);
+}
+
+async function loadState(){
+  try{
+    const c = await withTimeout(window.storage.get('config', true));
+    state.config = c ? JSON.parse(c.value) : null;
+  }catch(e){ state.config = null; }
+  if(!state.config){
+    state.config = DEFAULT_PORTALS;
+    await saveConfig();
+  }
+
+  try{
+    const e = await withTimeout(window.storage.get('entries', true));
+    state.entries = e ? JSON.parse(e.value) : [];
+  }catch(e){ state.entries = []; }
+}
+
+async function saveConfig(){
+  try{ await withTimeout(window.storage.set('config', JSON.stringify(state.config), true)); }
+  catch(e){ console.error('Erro ao salvar config', e); }
+}
+async function saveEntries(){
+  try{ await withTimeout(window.storage.set('entries', JSON.stringify(state.entries), true)); }
+  catch(e){ console.error('Erro ao salvar lançamentos', e); }
+}
+
+// ---------- TABS ----------
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ---------- HELPERS ----------
+function monthKey(dateStr){ return dateStr ? dateStr.slice(0,7) : null; }
+
+function monthsAvailable(){
+  const set = new Set(state.entries.map(e=>monthKey(e.date)));
+  const now = new Date();
+  const current = now.toISOString().slice(0,7);
+  set.add(current);
+  return Array.from(set).sort().reverse();
+}
+
+function monthsBetween(start, end){
+  const [sy, sm] = start.split('-').map(Number);
+  const [ey, em] = end.split('-').map(Number);
+  return Math.max((ey - sy) * 12 + (em - sm) + 1, 1);
+}
+
+function computeRangeStats(start, end, shoppingId){
+  const numMonths = monthsBetween(start, end);
+  const rows = state.config.map(p=>{
+    const es = state.entries.filter(e=>{
+      if(e.portalId!==p.id) return false;
+      if(monthKey(e.date)<start || monthKey(e.date)>end) return false;
+      if(shoppingId && shoppingId!=='all' && e.shoppingId!==shoppingId) return false;
+      return true;
+    });
+    const portalLeads = es.reduce((s,e)=>s+Number(e.portalLeads||0),0);
+    const crmLeads = es.reduce((s,e)=>s+Number(e.crmLeads||0),0);
+    const leaked = Math.max(portalLeads - crmLeads, 0);
+    const leakPct = portalLeads>0 ? (leaked/portalLeads*100) : 0;
+    const feeTotal = Number(p.fee||0) * numMonths;
+    const promisedTotal = Number(p.promised||0) * numMonths;
+    const costPerLead = crmLeads>0 ? (feeTotal/crmLeads) : null;
+    const leakLoss = feeTotal>0 && portalLeads>0 ? feeTotal*(leaked/portalLeads) : 0;
+    const promiseFulfillPct = promisedTotal>0 ? Math.min((portalLeads/promisedTotal)*100, 999) : null;
+    const promiseLoss = (feeTotal>0 && promisedTotal>0 && portalLeads<promisedTotal) ? feeTotal*(1-(portalLeads/promisedTotal)) : 0;
+    return {portal:p, portalLeads, crmLeads, leaked, leakPct, costPerLead, leakLoss, promiseFulfillPct, promiseLoss, feeTotal, promisedTotal};
+  });
+  const totals = {
+    fee: rows.reduce((s,r)=>s+r.feeTotal,0),
+    crmLeads: rows.reduce((s,r)=>s+r.crmLeads,0),
+    portalLeads: rows.reduce((s,r)=>s+r.portalLeads,0),
+    leakLoss: rows.reduce((s,r)=>s+r.leakLoss,0),
+    promiseLoss: rows.reduce((s,r)=>s+r.promiseLoss,0),
+  };
+  totals.avgCost = totals.crmLeads>0 ? totals.fee/totals.crmLeads : 0;
+  return {rows, totals, numMonths};
+}
+
+function leakColor(pct){
+  if(pct <= 10) return getComputedStyle(document.documentElement).getPropertyValue('--good').trim();
+  if(pct <= 30) return getComputedStyle(document.documentElement).getPropertyValue('--warn').trim();
+  return getComputedStyle(document.documentElement).getPropertyValue('--bad').trim();
+}
+function leakPill(pct){
+  if(pct <= 10) return 'good';
+  if(pct <= 30) return 'warn';
+  return 'bad';
+}
+
+// ---------- RENDER: DASHBOARD ----------
+function renderShoppingSelect(){
+  const sel = document.getElementById('shoppingSelect');
+  const prev = sel.value;
+  sel.innerHTML = `<option value="all">Visão geral (todos)</option>` +
+    SHOPPINGS.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  sel.value = prev || 'all';
+}
+function renderMonthSelect(){
+  const startSel = document.getElementById('monthStart');
+  const endSel = document.getElementById('monthEnd');
+  const months = monthsAvailable().slice().sort(); // chronological
+  const prevStart = startSel.value, prevEnd = endSel.value;
+  const optionsHtml = months.map(m=>`<option value="${m}">${formatMonthLabel(m)}</option>`).join('');
+  startSel.innerHTML = optionsHtml;
+  endSel.innerHTML = optionsHtml;
+  startSel.value = months.includes(prevStart) ? prevStart : months[0];
+  endSel.value = months.includes(prevEnd) ? prevEnd : months[months.length-1];
+  if(startSel.value > endSel.value) endSel.value = startSel.value;
+}
+function formatMonthLabel(m){
+  const [y,mo] = m.split('-');
+  const names=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return `${names[parseInt(mo,10)-1]}/${y}`;
+}
+
+
+function renderDashboard(){
+  const start = document.getElementById('monthStart').value;
+  const end = document.getElementById('monthEnd').value;
+  const shoppingId = document.getElementById('shoppingSelect').value;
+  const isFiltered = shoppingId && shoppingId!=='all';
+  const shoppingName = isFiltered ? (SHOPPINGS.find(s=>s.id===shoppingId)||{}).name : null;
+  const {rows, totals, numMonths} = computeRangeStats(start, end, shoppingId);
+  const feeNote = isFiltered ? 'valor total do contrato do portal (não dividido por shopping)' : `${numMonths} ${numMonths===1?'mês':'meses'} · ${formatMonthLabel(start)} a ${formatMonthLabel(end)}`;
+
+  // summary strip
+  document.getElementById('summaryStrip').innerHTML = `
+    <div class="summary-card">
+      <div class="label">Mensalidades (período)</div>
+      <div class="value">${fmtBRL(totals.fee)}</div>
+      <div class="sub">${feeNote}</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Leads no CRM</div>
+      <div class="value">${fmtNum(totals.crmLeads)}</div>
+      <div class="sub">de ${fmtNum(totals.portalLeads)} recebidos nos portais${shoppingName ? ' · '+shoppingName : ''}</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Custo médio / lead</div>
+      <div class="value">${fmtBRL(totals.avgCost)}</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Lead não entregue Portais x CRM</div>
+      <div class="value bad">${fmtBRL(totals.leakLoss)}</div>
+      <div class="sub">portal não virou lead no CRM</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Leads não entregues pelos portais</div>
+      <div class="value bad">${fmtBRL(totals.promiseLoss)}</div>
+      <div class="sub">abaixo do prometido pelo portal</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Leads entregues pelos portais</div>
+      <div class="value">${fmtNum(totals.portalLeads)}</div>
+      <div class="sub">total no período, somando todos os portais</div>
+    </div>
+  `;
+
+  // portal cards
+  document.getElementById('portalCards').innerHTML = rows.map(r=>{
+    const color = leakColor(r.leakPct);
+    const pillClass = leakPill(r.leakPct);
+    return `
+    <div class="portal-card">
+      <div class="pc-head">
+        <h3>${r.portal.name}</h3>
+        <span class="pill ${pillClass}">${r.leakPct.toFixed(0)}% vazamento</span>
+      </div>
+      <div class="pc-body">
+        <div class="donut" style="--dp:${Math.min(r.leakPct,100)}; --dc:${color};"><span>${r.leakPct.toFixed(0)}%</span></div>
+        <div class="pc-stats">
+          <div class="stat-row"><span class="k">Leads no portal</span><span class="v">${fmtNum(r.portalLeads)}</span></div>
+          <div class="stat-row"><span class="k">Leads no CRM</span><span class="v">${fmtNum(r.crmLeads)}</span></div>
+          <div class="stat-row"><span class="k">Leads perdidos</span><span class="v">${fmtNum(r.leaked)}</span></div>
+        </div>
+      </div>
+      <div class="pc-fin">
+        <div class="fin-item"><div class="k">Custo / lead</div><div class="v">${r.costPerLead!==null ? fmtBRL(r.costPerLead) : '—'}</div></div>
+        <div class="fin-item"><div class="k">R$ em vazamento</div><div class="v">${fmtBRL(r.leakLoss)}</div></div>
+        <div class="fin-item"><div class="k">Prometido (período)</div><div class="v">${r.promisedTotal>0 ? fmtNum(r.promisedTotal) : '—'}</div></div>
+        <div class="fin-item"><div class="k">Entregue vs prometido</div><div class="v">${r.promiseFulfillPct!==null ? r.promiseFulfillPct.toFixed(0)+'%' : '—'}</div></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  renderBarChart(rows);
+  renderLineChart();
+  renderRankings(rows);
+}
+
+function renderBarChart(rows){
+  const ctx = document.getElementById('barChart');
+  const labels = rows.map(r=>r.portal.name);
+  const portalData = rows.map(r=>r.portalLeads);
+  const crmData = rows.map(r=>r.crmLeads);
+  if(barChart) barChart.destroy();
+  barChart = new Chart(ctx, {
+    type:'bar',
+    data:{ labels, datasets:[
+      {label:'Leads no portal', data:portalData, backgroundColor:'#ffd100', borderRadius:4},
+      {label:'Leads no CRM', data:crmData, backgroundColor:'#3ddc97', borderRadius:4},
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:'#8b93a1', font:{family:'Inter'} } } },
+      scales:{
+        x:{ ticks:{color:'#8b93a1', font:{family:'Inter'}}, grid:{color:'#2c323c'} },
+        y:{ ticks:{color:'#8b93a1', font:{family:'JetBrains Mono'}}, grid:{color:'#2c323c'}, beginAtZero:true }
+      }
+    }
+  });
+}
+
+function renderLineChart(){
+  const ctx = document.getElementById('lineChart');
+  const months = Array.from(new Set(state.entries.map(e=>monthKey(e.date)))).sort();
+  const crmByMonth = months.map(m=> state.entries.filter(e=>monthKey(e.date)===m).reduce((s,e)=>s+Number(e.crmLeads||0),0));
+  const portalByMonth = months.map(m=> state.entries.filter(e=>monthKey(e.date)===m).reduce((s,e)=>s+Number(e.portalLeads||0),0));
+  if(lineChart) lineChart.destroy();
+  lineChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels: months.map(formatMonthLabel), datasets:[
+      {label:'Leads no portal', data:portalByMonth, borderColor:'#ffd100', backgroundColor:'rgba(255,209,0,.1)', tension:.3, fill:true},
+      {label:'Leads no CRM', data:crmByMonth, borderColor:'#3ddc97', backgroundColor:'rgba(61,220,151,.12)', tension:.3, fill:true},
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:'#8b93a1', font:{family:'Inter'} } } },
+      scales:{
+        x:{ ticks:{color:'#8b93a1', font:{family:'Inter'}}, grid:{color:'#2c323c'} },
+        y:{ ticks:{color:'#8b93a1', font:{family:'JetBrains Mono'}}, grid:{color:'#2c323c'}, beginAtZero:true }
+      }
+    }
+  });
+}
+
+function renderRankings(rows){
+  const byCost = [...rows].filter(r=>r.costPerLead!==null).sort((a,b)=>a.costPerLead-b.costPerLead);
+  document.getElementById('rankCost').innerHTML = byCost.length ? byCost.map((r,i)=>`
+    <div class="rank-row">
+      <span class="rn">${i+1}</span>
+      <span class="rname">${r.portal.name}</span>
+      <div class="rbar-wrap"><div class="rbar" style="width:${Math.min((r.costPerLead/(byCost[byCost.length-1].costPerLead||1))*100,100)}%; background:#ffd100;"></div></div>
+      <span class="rval">${fmtBRL(r.costPerLead)}</span>
+    </div>`).join('') : `<div class="empty-state">Sem dados suficientes no mês selecionado.</div>`;
+
+  const byPromise = [...rows].filter(r=>r.promiseFulfillPct!==null).sort((a,b)=>b.promiseFulfillPct-a.promiseFulfillPct);
+  document.getElementById('rankPromise').innerHTML = byPromise.length ? byPromise.map((r,i)=>{
+    const color = r.promiseFulfillPct>=90 ? 'var(--good)' : r.promiseFulfillPct>=60 ? 'var(--warn)' : 'var(--bad)';
+    return `
+    <div class="rank-row">
+      <span class="rn">${i+1}</span>
+      <span class="rname">${r.portal.name}</span>
+      <div class="rbar-wrap"><div class="rbar" style="width:${Math.min(r.promiseFulfillPct,100)}%; background:${color};"></div></div>
+      <span class="rval">${r.promiseFulfillPct.toFixed(0)}%</span>
+    </div>`;
+  }).join('') : `<div class="empty-state">Cadastre "leads prometidos" nos portais para ver este ranking.</div>`;
+}
+
+// ---------- RENDER: ENTRIES ----------
+function renderEntryShoppingSelect(){
+  const sel = document.getElementById('entryShopping');
+  sel.innerHTML = SHOPPINGS.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+}
+function renderEntryPortalSelect(){
+  const sel = document.getElementById('entryPortal');
+  sel.innerHTML = state.config.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+}
+
+function renderEntriesTable(){
+  const body = document.getElementById('entriesBody');
+  const sorted = [...state.entries].sort((a,b)=> b.date.localeCompare(a.date));
+  document.getElementById('entriesEmpty').style.display = sorted.length ? 'none' : 'block';
+  body.innerHTML = sorted.map(e=>{
+    const portal = state.config.find(p=>p.id===e.portalId);
+    const shopping = SHOPPINGS.find(s=>s.id===e.shoppingId);
+    const leaked = Math.max(Number(e.portalLeads||0) - Number(e.crmLeads||0), 0);
+    const pct = e.portalLeads>0 ? (leaked/e.portalLeads*100) : 0;
+    return `<tr>
+      <td>${formatDateBR(e.date)}</td>
+      <td class="name">${shopping ? shopping.name : '—'}</td>
+      <td class="name">${portal ? portal.name : '—'}</td>
+      <td>${fmtNum(e.portalLeads)}</td>
+      <td>${fmtNum(e.crmLeads)}</td>
+      <td><span class="pill ${leakPill(pct)}">${pct.toFixed(0)}%</span></td>
+      <td><button class="ghost" onclick="deleteEntry('${e.id}')">Remover</button></td>
+    </tr>`;
+  }).join('');
+}
+function formatDateBR(d){
+  const [y,m,day] = d.split('-');
+  return `${day}/${m}/${y}`;
+}
+
+document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
+  ev.preventDefault();
+  const entry = {
+    id: uid(),
+    shoppingId: document.getElementById('entryShopping').value,
+    portalId: document.getElementById('entryPortal').value,
+    date: document.getElementById('entryDate').value,
+    portalLeads: Number(document.getElementById('entryPortalLeads').value||0),
+    crmLeads: Number(document.getElementById('entryCrmLeads').value||0),
+  };
+  state.entries.push(entry);
+  await saveEntries();
+  ev.target.reset();
+  document.getElementById('entryDate').value = new Date().toISOString().slice(0,10);
+  renderEntryShoppingSelect();
+  renderEntriesTable();
+  renderMonthSelect();
+  renderDashboard();
+});
+
+
+window.deleteEntry = async (id)=>{
+  state.entries = state.entries.filter(e=>e.id!==id);
+  await saveEntries();
+  renderEntriesTable();
+  renderMonthSelect();
+  renderDashboard();
+};
+
+// ---------- RENDER: CONFIG ----------
+function renderConfigTable(){
+  const body = document.getElementById('configBody');
+  body.innerHTML = state.config.map(p=>`
+    <tr>
+      <td class="name">${p.name}</td>
+      <td><input type="number" min="0" step="0.01" value="${p.fee}" onchange="updatePortal('${p.id}','fee',this.value)"></td>
+      <td><input type="number" min="0" value="${p.promised}" onchange="updatePortal('${p.id}','promised',this.value)"></td>
+      <td><button class="ghost" onclick="deletePortal('${p.id}')">Remover</button></td>
+    </tr>
+  `).join('');
+}
+
+window.updatePortal = async (id, field, value)=>{
+  const p = state.config.find(p=>p.id===id);
+  if(p){ p[field] = Number(value||0); await saveConfig(); renderDashboard(); }
+};
+window.deletePortal = async (id)=>{
+  state.config = state.config.filter(p=>p.id!==id);
+  await saveConfig();
+  renderConfigTable();
+  renderEntryPortalSelect();
+  renderDashboard();
+};
+
+document.getElementById('portalForm').addEventListener('submit', async (ev)=>{
+  ev.preventDefault();
+  const name = document.getElementById('newPortalName').value.trim();
+  if(!name) return;
+  state.config.push({
+    id: uid(),
+    name,
+    fee: Number(document.getElementById('newPortalFee').value||0),
+    promised: Number(document.getElementById('newPortalPromised').value||0),
+  });
+  await saveConfig();
+  ev.target.reset();
+  renderConfigTable();
+  renderEntryPortalSelect();
+  renderDashboard();
+});
+
+document.getElementById('monthStart').addEventListener('change', renderDashboard);
+document.getElementById('monthEnd').addEventListener('change', renderDashboard);
+document.getElementById('shoppingSelect').addEventListener('change', renderDashboard);
+
+// ---------- HANDLER GLOBAL DE ERRO (visível na tela, sem precisar de DevTools) ----------
+function showFatalError(msg){
+  let box = document.getElementById('fatalErrorBox');
+  if(!box){
+    box = document.createElement('div');
+    box.id = 'fatalErrorBox';
+    box.style.cssText = 'position:fixed; bottom:12px; left:12px; right:12px; z-index:99999; background:#3a1414; border:1px solid #ff6b4a; color:#ffb4a0; font-family:monospace; font-size:12px; padding:10px 14px; border-radius:8px; max-height:160px; overflow:auto; white-space:pre-wrap;';
+    document.body.appendChild(box);
+  }
+  const line = document.createElement('div');
+  line.textContent = '⚠ ' + msg;
+  box.appendChild(line);
+}
+window.addEventListener('error', (ev)=>{
+  showFatalError((ev.message||'Erro desconhecido') + (ev.filename ? ' — linha '+ev.lineno : ''));
+});
+window.addEventListener('unhandledrejection', (ev)=>{
+  showFatalError('Promise rejeitada: ' + (ev.reason && ev.reason.message ? ev.reason.message : ev.reason));
+});
+
+// ---------- AUTH GATE (senha fixa, sem depender de armazenamento) ----------
+const ACCESS_PASSWORD = 'arenamotors2026';
+
+function initAuth(){
+  try{
+    const form = document.getElementById('authForm');
+    const pwInput = document.getElementById('authPassword');
+    const errorEl = document.getElementById('authError');
+    const toggleBtn = document.getElementById('toggleAuthPw');
+
+    if(!form || !pwInput || !errorEl){
+      showFatalError('Elementos do formulário de senha não encontrados no DOM.');
+      return;
+    }
+
+    if(toggleBtn){
+      toggleBtn.addEventListener('click', ()=>{
+        const showing = pwInput.type === 'text';
+        pwInput.type = showing ? 'password' : 'text';
+        toggleBtn.textContent = showing ? '👁' : '🙈';
+      });
+    }
+
+    form.addEventListener('submit', (ev)=>{
+      ev.preventDefault();
+      try{
+        errorEl.textContent = '';
+        if(pwInput.value.trim() === ACCESS_PASSWORD){
+          unlockApp();
+        } else {
+          errorEl.textContent = 'Senha incorreta.';
+          pwInput.value = '';
+        }
+      }catch(err){
+        showFatalError('Erro ao processar login: ' + err.message);
+      }
+    });
+  }catch(err){
+    showFatalError('Erro ao inicializar autenticação: ' + err.message);
+  }
+}
+
+function unlockApp(){
+  try{
+    document.getElementById('authOverlay').remove();
+    document.querySelector('.wrap').style.display = 'block';
+    startApp();
+  }catch(err){
+    showFatalError('Erro ao desbloquear painel: ' + err.message);
+  }
+}
+
+async function startApp(){
+  try{
+    document.getElementById('entryDate').value = new Date().toISOString().slice(0,10);
+    await loadState();
+    renderShoppingSelect();
+    renderMonthSelect();
+    renderEntryShoppingSelect();
+    renderEntryPortalSelect();
+    renderConfigTable();
+    renderEntriesTable();
+    renderDashboard();
+  }catch(err){
+    showFatalError('Erro ao carregar o painel: ' + err.message);
+  }
+}
+
+// ---------- INIT ----------
+initAuth();
+</script>
+</body>
+</html>
