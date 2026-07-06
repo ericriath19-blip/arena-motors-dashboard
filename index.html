@@ -371,7 +371,7 @@ let barChart, lineChart;
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4-Hjg_fKyrhAKlPfHJ2wWWYq99QkVpH_Z4aVzu9TTtjihfzdhxU4sBF3cq-P-CFvNPw/exec';
 const APPS_SCRIPT_TOKEN = '20ae7f792d18525b37182be5afcda2b6';
 
-function withTimeout(promise, ms=20000){
+function withTimeout(promise, ms=25000){
   let timeoutId;
   const timeoutPromise = new Promise((resolve)=>{
     timeoutId = setTimeout(()=> resolve('__TIMEOUT__'), ms);
@@ -385,23 +385,23 @@ function withTimeout(promise, ms=20000){
   });
 }
 
-async function apiGet(action){
+async function apiGet(action, timeoutMs=15000){
   const cacheBust = Date.now() + '-' + Math.random().toString(36).slice(2);
   const url = `${APPS_SCRIPT_URL}?action=${action}&token=${APPS_SCRIPT_TOKEN}&_=${cacheBust}`;
-  const res = await withTimeout(fetch(url, { cache: 'no-store' }));
+  const res = await withTimeout(fetch(url, { cache: 'no-store' }), timeoutMs);
   const json = await res.json();
   if(json.error) throw new Error(json.error);
   return json.data;
 }
 
-async function apiGetWithRetry(action, retries=2){
+async function apiGetWithRetry(action, retries=3){
   let lastErr;
   for(let i=0; i<=retries; i++){
     try{
-      return await apiGet(action);
+      return await apiGet(action, 15000 + (i*10000)); // 15s, 25s, 35s, 45s - dá mais tempo a cada tentativa
     }catch(e){
       lastErr = e;
-      if(i < retries) await new Promise(r=>setTimeout(r, 1500));
+      if(i < retries) await new Promise(r=>setTimeout(r, 1000));
     }
   }
   throw lastErr;
@@ -890,10 +890,28 @@ function unlockApp(){
   try{
     document.getElementById('authOverlay').remove();
     document.querySelector('.wrap').style.display = 'block';
+    showLoadingOverlay();
     startApp();
   }catch(err){
     showFatalError('Erro ao desbloquear painel: ' + err.message);
   }
+}
+
+function showLoadingOverlay(){
+  const box = document.createElement('div');
+  box.id = 'loadingOverlay';
+  box.style.cssText = 'position:fixed; inset:0; background:rgba(10,10,10,0.92); z-index:9998; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; font-family:sans-serif; color:#f5f5f0;';
+  box.innerHTML = `
+    <div style="width:36px;height:36px;border:3px solid #2c2c2c;border-top-color:#ffd100;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+    <div style="font-size:14px;color:#9a9a92;">Carregando dados da planilha...<br><span style="font-size:12px;">Pode levar até 30s na primeira vez do dia</span></div>
+    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+  `;
+  document.body.appendChild(box);
+}
+
+function hideLoadingOverlay(){
+  const box = document.getElementById('loadingOverlay');
+  if(box) box.remove();
 }
 
 async function startApp(){
@@ -909,6 +927,8 @@ async function startApp(){
     renderDashboard();
   }catch(err){
     showFatalError('Erro ao carregar o painel: ' + err.message);
+  }finally{
+    hideLoadingOverlay();
   }
 }
 
