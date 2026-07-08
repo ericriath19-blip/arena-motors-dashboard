@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Migração completa - Arena Motors</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<style>
+  body{ background:#0a0a0a; color:#f5f5f0; font-family:monospace; padding:24px; max-width:800px; margin:0 auto; }
+  h1{ font-size:18px; margin-bottom:16px; }
+  button{ background:#ffd100; color:#0a0a0a; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px; }
+  button:disabled{ opacity:0.5; cursor:not-allowed; }
+  #log{ margin-top:20px; background:#141414; border:1px solid #2c2c2c; border-radius:8px; padding:16px; white-space:pre-wrap; font-size:13px; line-height:1.6; max-height:500px; overflow:auto; }
+  .ok{ color:#3ddc97; }
+  .err{ color:#ff6b4a; }
+  .warn{ color:#ffe066; }
+</style>
+</head>
+<body>
+<h1>🔄 Migração completa (95 lançamentos): planilha → Firestore</h1>
+<p style="color:#9a9a92; font-size:13px; margin-bottom:16px;">Apaga os lançamentos atuais e importa os 95 da planilha enviada. Uso único.</p>
+<button id="btnMigrate">Iniciar migração</button>
+<div id="log"></div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyADj6CWOUh66_G7qMoFmLxzorSRmwzhG3Q",
+  authDomain: "arena-motors-dashboard.firebaseapp.com",
+  projectId: "arena-motors-dashboard",
+  storageBucket: "arena-motors-dashboard.firebasestorage.app",
+  messagingSenderId: "668179364218",
+  appId: "1:668179364218:web:7fc08915222efb30c13ec3"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const NEW_ENTRIES = [{"id": "fhw5q2ihmr53lq19", "shoppingId": "arena-sul", "portalId": "webmotors", "date": "2026-04-01", "portalLeads": 68, "crmLeads": 60}, {"id": "04jmbt0ymr53mqgr", "shoppingId": "arena-sul", "portalId": "olx", "date": "2026-04-01", "portalLeads": 390, "crmLeads": 151}, {"id": "438zef1hmr53ng0d", "shoppingId": "arena-sul", "portalId": "mobiauto", "date": "2026-04-01", "portalLeads": 98, "crmLeads": 98}, {"id": "vub18di4mr53ps4a", "shoppingId": "arena-leste", "portalId": "webmotors", "date": "2026-04-03", "portalLeads": 363, "crmLeads": 373}, {"id": "d1hbi2izmr53qevf", "shoppingId": "arena-leste", "portalId": "olx", "date": "2026-04-03", "portalLeads": 441, "crmLeads": 180}, {"id": "426k7alemr53r4b8", "shoppingId": "arena-leste", "portalId": "mobiauto", "date": "2026-04-03", "portalLeads": 151, "crmLeads": 156}, {"id": "1ckyayeqmr53sgvb", "shoppingId": "arena-sto-andre", "portalId": "webmotors", "date": "2026-04-03", "portalLeads": 421, "crmLeads": 402}, {"id": "y0dq0yhhmr53tatm", "shoppingId": "arena-leste", "portalId": "usadosbr", "date": "2026-04-03", "portalLeads": 162, "crmLeads": 136}, {"id": "p3z3lzltmr53uxgi", "shoppingId": "arena-sul", "portalId": "usadosbr", "date": "2026-04-03", "portalLeads": 106, "crmLeads": 100}, {"id": "wssskqt2mr53wlk0", "shoppingId": "arena-sto-andre", "portalId": "usadosbr", "date": "2026-04-03", "portalLeads": 174, "crmLeads": 164}, {"id": "dks3bh9omr53xbp9", "shoppingId": "arena-sto-andre", "portalId": "olx", "date": "2026-04-03", "portalLeads": 430, "crmLeads": 240}, {"id": "60y9vxmkmr53xzdb", "shoppingId": "arena-sto-andre", "portalId": "mobiauto", "date": "2026-04-03", "portalLeads": 184, "crmLeads": 180}, {"id": "v229kt6fmr54ljoq", "shoppingId": "arena-sul", "portalId": "icarros", "date": "2026-04-03", "portalLeads": 69, "crmLeads": 33}, {"id": "c3cqq8ojmr54m3wq", "shoppingId": "arena-leste", "portalId": "icarros", "date": "2026-04-03", "portalLeads": 111, "crmLeads": 98}, {"id": "hn15g3izmr54mp1c", "shoppingId": "arena-sto-andre", "portalId": "icarros", "date": "2026-04-03", "portalLeads": 229, "crmLeads": 189}, {"id": "iwx5tcykmr560mid", "shoppingId": "nacoes-unidas", "portalId": "usadosbr", "date": "2026-04-03", "portalLeads": 198, "crmLeads": 186}, {"id": "neloteifmr5615ua", "shoppingId": "nacoes-unidas", "portalId": "webmotors", "date": "2026-04-03", "portalLeads": 180, "crmLeads": 195}, {"id": "k5hnxmmdmr561phj", "shoppingId": "nacoes-unidas", "portalId": "olx", "date": "2026-04-03", "portalLeads": 455, "crmLeads": 159}, {"id": "euy894xtmr56271g", "shoppingId": "nacoes-unidas", "portalId": "mobiauto", "date": "2026-04-03", "portalLeads": 99, "crmLeads": 100}, {"id": "bg76pf5pmr562opu", "shoppingId": "nacoes-unidas", "portalId": "icarros", "date": "2026-04-03", "portalLeads": 77, "crmLeads": 69}, {"id": "62cqhwa3mr5698t5", "shoppingId": "arena-sul", "portalId": "usadosbr", "date": "2026-05-03", "portalLeads": 266, "crmLeads": 61}, {"id": "3bstw4ogmr569qhr", "shoppingId": "arena-sul", "portalId": "webmotors", "date": "2026-05-03", "portalLeads": 85, "crmLeads": 90}, {"id": "i179sh5qmr56a8jt", "shoppingId": "arena-sul", "portalId": "olx", "date": "2026-05-03", "portalLeads": 392, "crmLeads": 164}, {"id": "o743vmsvmr56apk4", "shoppingId": "arena-sul", "portalId": "mobiauto", "date": "2026-05-03", "portalLeads": 77, "crmLeads": 76}, {"id": "ow2waxd3mr56b9aw", "shoppingId": "arena-sul", "portalId": "icarros", "date": "2026-05-03", "portalLeads": 49, "crmLeads": 35}, {"id": "haf9p0e9mr56c3rp", "shoppingId": "arena-leste", "portalId": "usadosbr", "date": "2026-05-03", "portalLeads": 235, "crmLeads": 201}, {"id": "sqa148p5mr56f4vu", "shoppingId": "arena-leste", "portalId": "webmotors", "date": "2026-05-03", "portalLeads": 337, "crmLeads": 369}, {"id": "w0gtjwoamr56fnhs", "shoppingId": "arena-leste", "portalId": "olx", "date": "2026-05-03", "portalLeads": 520, "crmLeads": 197}, {"id": "afabc2j7mr56g3pc", "shoppingId": "arena-leste", "portalId": "mobiauto", "date": "2026-05-03", "portalLeads": 90, "crmLeads": 90}, {"id": "jn5gjl06mr56gk6u", "shoppingId": "arena-leste", "portalId": "icarros", "date": "2026-05-03", "portalLeads": 137, "crmLeads": 117}, {"id": "t4vj26y3mr56hhgl", "shoppingId": "arena-sto-andre", "portalId": "usadosbr", "date": "2026-05-03", "portalLeads": 353, "crmLeads": 309}, {"id": "dezjqz39mr56i0ji", "shoppingId": "arena-sto-andre", "portalId": "webmotors", "date": "2026-05-03", "portalLeads": 398, "crmLeads": 432}, {"id": "tmbs4o2hmr56iggo", "shoppingId": "arena-sto-andre", "portalId": "olx", "date": "2026-05-03", "portalLeads": 427, "crmLeads": 422}, {"id": "0pyovushmr56j10y", "shoppingId": "arena-sto-andre", "portalId": "mobiauto", "date": "2026-05-03", "portalLeads": 185, "crmLeads": 151}, {"id": "diqnwx1hmr56jgry", "shoppingId": "arena-sto-andre", "portalId": "icarros", "date": "2026-05-03", "portalLeads": 179, "crmLeads": 141}, {"id": "mo6t540smr56k9yi", "shoppingId": "nacoes-unidas", "portalId": "usadosbr", "date": "2026-05-03", "portalLeads": 345, "crmLeads": 304}, {"id": "e611hur7mr56kvsr", "shoppingId": "nacoes-unidas", "portalId": "webmotors", "date": "2026-05-03", "portalLeads": 199, "crmLeads": 191}, {"id": "g6rtcbp1mr56lhe7", "shoppingId": "nacoes-unidas", "portalId": "olx", "date": "2026-05-03", "portalLeads": 271, "crmLeads": 126}, {"id": "dkhxsck7mr56mcal", "shoppingId": "nacoes-unidas", "portalId": "mobiauto", "date": "2026-05-03", "portalLeads": 82, "crmLeads": 78}, {"id": "6fo1hgqqmr56mtnl", "shoppingId": "nacoes-unidas", "portalId": "icarros", "date": "2026-05-03", "portalLeads": 73, "crmLeads": 42}, {"id": "wuhrzc6dmr57r78f", "shoppingId": "arena-sul", "portalId": "usadosbr", "date": "2026-06-03", "portalLeads": 261, "crmLeads": 0}, {"id": "d62408wjmr57rqg5", "shoppingId": "arena-sul", "portalId": "webmotors", "date": "2026-06-03", "portalLeads": 73, "crmLeads": 77}, {"id": "qroq3tdpmr57s3e8", "shoppingId": "arena-sul", "portalId": "olx", "date": "2026-06-03", "portalLeads": 196, "crmLeads": 41}, {"id": "6llyojjpmr57t7k1", "shoppingId": "arena-sul", "portalId": "mobiauto", "date": "2026-06-03", "portalLeads": 98, "crmLeads": 5}, {"id": "pgt4s1e8mr57tlx5", "shoppingId": "arena-sul", "portalId": "icarros", "date": "2026-06-03", "portalLeads": 38, "crmLeads": 28}, {"id": "9niob7bimr57u3nd", "shoppingId": "arena-leste", "portalId": "usadosbr", "date": "2026-06-03", "portalLeads": 284, "crmLeads": 199}, {"id": "xflqko59mr57uhbs", "shoppingId": "arena-leste", "portalId": "webmotors", "date": "2026-06-03", "portalLeads": 422, "crmLeads": 429}, {"id": "0kkexl85mr57v2wj", "shoppingId": "arena-leste", "portalId": "olx", "date": "2026-06-03", "portalLeads": 598, "crmLeads": 136}, {"id": "oqs0csixmr57wf12", "shoppingId": "arena-leste", "portalId": "mobiauto", "date": "2026-06-03", "portalLeads": 135, "crmLeads": 93}, {"id": "ung2win7mr57ww9t", "shoppingId": "arena-leste", "portalId": "icarros", "date": "2026-06-03", "portalLeads": 89, "crmLeads": 74}, {"id": "xsob7bbmmr57xbye", "shoppingId": "arena-sto-andre", "portalId": "usadosbr", "date": "2026-06-03", "portalLeads": 172, "crmLeads": 113}, {"id": "kiidszvsmr57xrai", "shoppingId": "arena-sto-andre", "portalId": "webmotors", "date": "2026-06-03", "portalLeads": 424, "crmLeads": 442}, {"id": "dc9gdwysmr57yaha", "shoppingId": "arena-sto-andre", "portalId": "olx", "date": "2026-06-03", "portalLeads": 219, "crmLeads": 260}, {"id": "r43tm2hhmr57ziuv", "shoppingId": "arena-sto-andre", "portalId": "mobiauto", "date": "2026-06-03", "portalLeads": 176, "crmLeads": 16}, {"id": "90zagjqumr5807iz", "shoppingId": "arena-sto-andre", "portalId": "icarros", "date": "2026-06-03", "portalLeads": 197, "crmLeads": 158}, {"id": "o2kmyl9gmr580mx3", "shoppingId": "nacoes-unidas", "portalId": "usadosbr", "date": "2026-06-03", "portalLeads": 357, "crmLeads": 222}, {"id": "l44wpyyymr581hka", "shoppingId": "nacoes-unidas", "portalId": "webmotors", "date": "2026-06-03", "portalLeads": 146, "crmLeads": 148}, {"id": "l14az8y7mr58218s", "shoppingId": "nacoes-unidas", "portalId": "olx", "date": "2026-06-03", "portalLeads": 193, "crmLeads": 44}, {"id": "jm317fm1mr582s7f", "shoppingId": "nacoes-unidas", "portalId": "mobiauto", "date": "2026-06-03", "portalLeads": 100, "crmLeads": 10}, {"id": "9ti3nuwqmr5839i5", "shoppingId": "nacoes-unidas", "portalId": "icarros", "date": "2026-06-03", "portalLeads": 71, "crmLeads": 29}, {"id": "pq9jtsgnmr58xezi", "shoppingId": "arena-sul", "portalId": "site-proprio", "date": "2026-04-03", "portalLeads": 300, "crmLeads": 183}, {"id": "x4sxh0g7mr58y619", "shoppingId": "nacoes-unidas", "portalId": "site-proprio", "date": "2026-04-03", "portalLeads": 300, "crmLeads": 341}, {"id": "mxbd2nb6mr58yjuo", "shoppingId": "arena-leste", "portalId": "site-proprio", "date": "2026-04-03", "portalLeads": 300, "crmLeads": 238}, {"id": "4e9r3so9mr58z7c7", "shoppingId": "arena-sto-andre", "portalId": "site-proprio", "date": "2026-04-03", "portalLeads": 300, "crmLeads": 378}, {"id": "n89ug8dnmr59l8bn", "shoppingId": "arena-sul", "portalId": "site-proprio", "date": "2026-05-03", "portalLeads": 300, "crmLeads": 181}, {"id": "wqlla3mamr59loj6", "shoppingId": "nacoes-unidas", "portalId": "site-proprio", "date": "2026-05-03", "portalLeads": 300, "crmLeads": 234}, {"id": "2abud7wbmr59mkp5", "shoppingId": "arena-sto-andre", "portalId": "site-proprio", "date": "2026-05-03", "portalLeads": 300, "crmLeads": 351}, {"id": "jcpvz05kmr59q3ff", "shoppingId": "arena-leste", "portalId": "site-proprio", "date": "2026-05-03", "portalLeads": 300, "crmLeads": 228}, {"id": "w3euoiyamr59r13x", "shoppingId": "arena-sul", "portalId": "site-proprio", "date": "2026-06-03", "portalLeads": 300, "crmLeads": 153}, {"id": "5hkhl792mr59rbtx", "shoppingId": "nacoes-unidas", "portalId": "site-proprio", "date": "2026-06-03", "portalLeads": 300, "crmLeads": 107}, {"id": "l8lifagdmr59rurv", "shoppingId": "arena-leste", "portalId": "site-proprio", "date": "2026-06-03", "portalLeads": 300, "crmLeads": 141}, {"id": "sxwncfywmr59sdi1", "shoppingId": "arena-sto-andre", "portalId": "site-proprio", "date": "2026-06-03", "portalLeads": 300, "crmLeads": 231}, {"id": "dlxq5kwhmr5bhzwg", "shoppingId": "arena-sto-andre", "portalId": "napista", "date": "2026-05-03", "portalLeads": 54, "crmLeads": 50}, {"id": "ob7dxpvdmr5bigus", "shoppingId": "arena-sto-andre", "portalId": "napista", "date": "2026-06-03", "portalLeads": 251, "crmLeads": 230}, {"id": "g8glkovkmr9je38h", "shoppingId": "arena-leste", "portalId": "webmotors", "date": "2026-07-05", "portalLeads": 108, "crmLeads": 82}, {"id": "4y7eifvumr9jl46p", "shoppingId": "arena-sto-andre", "portalId": "webmotors", "date": "2026-07-05", "portalLeads": 105, "crmLeads": 78}, {"id": "n94ksedqmraug2bb", "shoppingId": "arena-sto-andre", "portalId": "site-proprio", "date": "2026-07-05", "portalLeads": 300, "crmLeads": 38}, {"id": "qsbaexjtmrauhgon", "shoppingId": "arena-leste", "portalId": "site-proprio", "date": "2026-07-05", "portalLeads": 300, "crmLeads": 21}, {"id": "kcu0wzlgmraukh16", "shoppingId": "arena-sto-andre", "portalId": "napista", "date": "2026-07-05", "portalLeads": 61, "crmLeads": 44}, {"id": "lvwojva8mrauqyum", "shoppingId": "arena-leste", "portalId": "usadosbr", "date": "2026-07-05", "portalLeads": 30, "crmLeads": 25}, {"id": "tyxkk3r6mrausrcf", "shoppingId": "arena-sto-andre", "portalId": "usadosbr", "date": "2026-07-05", "portalLeads": 36, "crmLeads": 24}, {"id": "e6wcojhvmrauvvss", "shoppingId": "arena-leste", "portalId": "mobiauto", "date": "2026-07-05", "portalLeads": 40, "crmLeads": 28}, {"id": "f30lfk4qmrauznfu", "shoppingId": "arena-sto-andre", "portalId": "mobiauto", "date": "2026-07-05", "portalLeads": 64, "crmLeads": 49}, {"id": "vbqtfjt5mray332c", "shoppingId": "arena-sto-andre", "portalId": "olx", "date": "2026-07-05", "portalLeads": 196, "crmLeads": 246}, {"id": "qocukqfrmray75bd", "shoppingId": "arena-leste", "portalId": "olx", "date": "2026-07-05", "portalLeads": 157, "crmLeads": 27}, {"id": "wjltfsd0mrb0s1xx", "shoppingId": "arena-sul", "portalId": "site-proprio", "date": "2026-07-06", "portalLeads": 300, "crmLeads": 27}, {"id": "fm5wrq33mrb0vi0j", "shoppingId": "arena-sul", "portalId": "webmotors", "date": "2026-07-06", "portalLeads": 28, "crmLeads": 24}, {"id": "a8g556krmrb0wxtv", "shoppingId": "arena-sul", "portalId": "olx", "date": "2026-07-06", "portalLeads": 102, "crmLeads": 18}, {"id": "ykc09fntmrb0yuca", "shoppingId": "arena-sul", "portalId": "usadosbr", "date": "2026-07-06", "portalLeads": 25, "crmLeads": 22}, {"id": "fe5zz3rwmrb12291", "shoppingId": "arena-sul", "portalId": "mobiauto", "date": "2026-07-06", "portalLeads": 26, "crmLeads": 18}, {"id": "tqbldbwbmrb13zud", "shoppingId": "nacoes-unidas", "portalId": "site-proprio", "date": "2026-07-06", "portalLeads": 300, "crmLeads": 12}, {"id": "94dp8ks6mrb16g5n", "shoppingId": "nacoes-unidas", "portalId": "webmotors", "date": "2026-07-06", "portalLeads": 26, "crmLeads": 26}, {"id": "knk4k7j1mrb17j8n", "shoppingId": "nacoes-unidas", "portalId": "olx", "date": "2026-07-06", "portalLeads": 97, "crmLeads": 13}, {"id": "7qw61b0omrb1al29", "shoppingId": "nacoes-unidas", "portalId": "usadosbr", "date": "2026-07-06", "portalLeads": 32, "crmLeads": 29}, {"id": "6tces39gmrb1boga", "shoppingId": "nacoes-unidas", "portalId": "mobiauto", "date": "2026-07-06", "portalLeads": 22, "crmLeads": 14}];
+
+const logEl = document.getElementById('log');
+function log(msg, cls=''){
+  const line = document.createElement('div');
+  if(cls) line.className = cls;
+  line.textContent = msg;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+async function commitInChunks(db, docs, colName){
+  // Firestore batch limita 500 operações; aqui vai em blocos de 400 por segurança
+  const chunkSize = 400;
+  for(let i=0; i<docs.length; i+=chunkSize){
+    const batch = db.batch();
+    docs.slice(i, i+chunkSize).forEach(op => op(batch));
+    await batch.commit();
+  }
+}
+
+document.getElementById('btnMigrate').addEventListener('click', async ()=>{
+  document.getElementById('btnMigrate').disabled = true;
+  logEl.innerHTML = '';
+  try{
+    log('Autenticando no Firebase...');
+    await new Promise((resolve, reject)=>{
+      const t = setTimeout(()=>reject(new Error('timeout na autenticação')), 15000);
+      firebase.auth().onAuthStateChanged(u=>{ if(u){ clearTimeout(t); resolve(); } });
+      firebase.auth().signInAnonymously().catch(reject);
+    });
+    log('Autenticado.', 'ok');
+
+    log('Buscando lançamentos atuais no Firestore pra apagar...');
+    const existing = await db.collection('entries').get();
+    log(`Encontrados ${existing.docs.length} lançamentos existentes.`);
+
+    if(existing.docs.length > 0){
+      log('Apagando lançamentos existentes (evita duplicação)...');
+      await commitInChunks(db, existing.docs.map(d => (batch)=> batch.delete(d.ref)), 'entries');
+      log(`${existing.docs.length} lançamentos antigos apagados.`, 'ok');
+    }
+
+    log(`Gravando ${NEW_ENTRIES.length} lançamentos da planilha...`);
+    await commitInChunks(db, NEW_ENTRIES.map(e => (batch)=>{
+      const clean = {
+        id: String(e.id), shoppingId: String(e.shoppingId), portalId: String(e.portalId),
+        date: String(e.date), portalLeads: Number(e.portalLeads||0), crmLeads: Number(e.crmLeads||0)
+      };
+      batch.set(db.collection('entries').doc(clean.id), clean);
+    }), 'entries');
+    log(`${NEW_ENTRIES.length} lançamentos gravados.`, 'ok');
+
+    log('');
+    log('✅ MIGRAÇÃO CONCLUÍDA. Pode fechar essa página e voltar pro painel.', 'ok');
+  }catch(err){
+    log('ERRO: ' + err.message, 'err');
+    document.getElementById('btnMigrate').disabled = false;
+  }
+});
+</script>
+</body>
+</html>
