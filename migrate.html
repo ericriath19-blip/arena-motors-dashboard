@@ -18,8 +18,8 @@
 </style>
 </head>
 <body>
-<h1>🔄 Migração única: Google Sheets → Firestore</h1>
-<p style="color:#9a9a92; font-size:13px; margin-bottom:16px;">Ferramenta de uso único. Depois de migrar, pode fechar essa página e não precisa mais dela.</p>
+<h1>🔄 Migração única: dados fixos → Firestore</h1>
+<p style="color:#9a9a92; font-size:13px; margin-bottom:16px;">Usa dados colados manualmente (sem depender do Apps Script). Uso único, depois pode fechar.</p>
 <button id="btnMigrate">Iniciar migração</button>
 <div id="log"></div>
 
@@ -35,8 +35,35 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4-Hjg_fKyrhAKlPfHJ2wWWYq99QkVpH_Z4aVzu9TTtjihfzdhxU4sBF3cq-P-CFvNPw/exec';
-const APPS_SCRIPT_TOKEN = '20ae7f792d18525b37182be5afcda2b6';
+// Dado colado manualmente pelo usuário (config atual, com "Icarros" incluso)
+const OLD_CONFIG = [
+  {"id":"site-proprio","name":"Site Próprio","fee":30000,"promised":1200},
+  {"id":"webmotors","name":"Webmotors","fee":32000,"promised":1280},
+  {"id":"olx","name":"OLX","fee":12280,"promised":680},
+  {"id":"napista","name":"Na Pista","fee":3000,"promised":200},
+  {"id":"usadosbr","name":"UsadosBR","fee":20000,"promised":1600},
+  {"id":"mobiauto","name":"Mobiauto","fee":8000,"promised":400},
+  {"id":"icarros","name":"Icarros","fee":8000,"promised":600}
+];
+
+// Dado capturado do print da planilha antes da migração
+const OLD_ENTRIES = [
+  {"id":"fhw5q2ihmr53lq19","shoppingId":"arena-sul","portalId":"webmotors","date":"2026-04-01","portalLeads":68,"crmLeads":60},
+  {"id":"04jmbt0ymr53mqgr","shoppingId":"arena-sul","portalId":"olx","date":"2026-04-01","portalLeads":390,"crmLeads":151},
+  {"id":"438zef1hmr53ng0d","shoppingId":"arena-sul","portalId":"mobiauto","date":"2026-04-01","portalLeads":98,"crmLeads":98},
+  {"id":"sbiqekifmr53oxft","shoppingId":"arena-sul","portalId":"4egceuwpmr53ogp2","date":"2026-04-01","portalLeads":69,"crmLeads":33},
+  {"id":"vub18di4mr53ps4a","shoppingId":"arena-leste","portalId":"webmotors","date":"2026-04-03","portalLeads":363,"crmLeads":373},
+  {"id":"d1hbi2izmr53qevf","shoppingId":"arena-leste","portalId":"olx","date":"2026-04-03","portalLeads":441,"crmLeads":180},
+  {"id":"426k7alemr53r4b8","shoppingId":"arena-leste","portalId":"mobiauto","date":"2026-04-03","portalLeads":151,"crmLeads":156},
+  {"id":"jgv6j3wpmr53rslz","shoppingId":"arena-leste","portalId":"4egceuwpmr53ogp2","date":"2026-04-03","portalLeads":111,"crmLeads":98},
+  {"id":"1ckyayeqmr53sgvb","shoppingId":"arena-sto-andre","portalId":"webmotors","date":"2026-04-03","portalLeads":421,"crmLeads":402},
+  {"id":"y0dq0yhhmr53tatm","shoppingId":"arena-leste","portalId":"usadosbr","date":"2026-04-03","portalLeads":162,"crmLeads":136},
+  {"id":"p3z3lzltmr53uxgi","shoppingId":"arena-sul","portalId":"usadosbr","date":"2026-04-03","portalLeads":106,"crmLeads":100},
+  {"id":"wsssskqt2mr53wlk0","shoppingId":"arena-sto-andre","portalId":"usadosbr","date":"2026-04-03","portalLeads":174,"crmLeads":164},
+  {"id":"dks3bh9omr53xbp9","shoppingId":"arena-sto-andre","portalId":"olx","date":"2026-04-03","portalLeads":430,"crmLeads":240},
+  {"id":"60y9vxmkmr53xzdb","shoppingId":"arena-sto-andre","portalId":"mobiauto","date":"2026-04-03","portalLeads":184,"crmLeads":180},
+  {"id":"9xmsnyohmr53yoyn","shoppingId":"arena-sto-andre","portalId":"4egceuwpmr53ogp2","date":"2026-04-03","portalLeads":229,"crmLeads":189}
+];
 
 const logEl = document.getElementById('log');
 function log(msg, cls=''){
@@ -45,15 +72,6 @@ function log(msg, cls=''){
   line.textContent = msg;
   logEl.appendChild(line);
   logEl.scrollTop = logEl.scrollHeight;
-}
-
-async function fetchOld(action){
-  const cacheBust = Date.now() + '-' + Math.random().toString(36).slice(2);
-  const url = `${APPS_SCRIPT_URL}?action=${action}&token=${APPS_SCRIPT_TOKEN}&_=${cacheBust}`;
-  const res = await fetch(url, { cache: 'no-store' });
-  const json = await res.json();
-  if(json.error) throw new Error(json.error);
-  return json.data;
 }
 
 document.getElementById('btnMigrate').addEventListener('click', async ()=>{
@@ -68,29 +86,20 @@ document.getElementById('btnMigrate').addEventListener('click', async ()=>{
     });
     log('Autenticado.', 'ok');
 
-    log('Buscando CONFIG da planilha antiga...');
-    const oldConfig = await fetchOld('config');
-    log(`Encontrados ${oldConfig.length} portais na planilha.`, 'ok');
-
-    log('Buscando ENTRIES da planilha antiga...');
-    const oldEntries = await fetchOld('entries');
-    log(`Encontrados ${oldEntries.length} lançamentos na planilha.`, 'ok');
-
-    log('Gravando CONFIG no Firestore...');
+    log(`Gravando ${OLD_CONFIG.length} portais no Firestore...`);
     const batch1 = db.batch();
-    oldConfig.forEach(p=>{
+    OLD_CONFIG.forEach(p=>{
       const clean = { id: String(p.id), name: String(p.name), fee: Number(p.fee||0), promised: Number(p.promised||0) };
       batch1.set(db.collection('config').doc(clean.id), clean);
     });
     await batch1.commit();
-    log(`${oldConfig.length} portais gravados no Firestore.`, 'ok');
+    log(`${OLD_CONFIG.length} portais gravados.`, 'ok');
 
-    log('Gravando ENTRIES no Firestore...');
+    log(`Gravando ${OLD_ENTRIES.length} lançamentos no Firestore...`);
     const batch2 = db.batch();
     let fixedCount = 0;
-    oldEntries.forEach(e=>{
+    OLD_ENTRIES.forEach(e=>{
       let portalId = String(e.portalId);
-      // Corrige o ID quebrado identificado (era pra ser "napista")
       if(portalId === '4egceuwpmr53ogp2'){
         portalId = 'napista';
         fixedCount++;
@@ -102,9 +111,9 @@ document.getElementById('btnMigrate').addEventListener('click', async ()=>{
       batch2.set(db.collection('entries').doc(clean.id), clean);
     });
     await batch2.commit();
-    log(`${oldEntries.length} lançamentos gravados no Firestore.`, 'ok');
+    log(`${OLD_ENTRIES.length} lançamentos gravados.`, 'ok');
     if(fixedCount > 0){
-      log(`${fixedCount} lançamento(s) tiveram o portalId corrigido de ID quebrado para "napista".`, 'warn');
+      log(`${fixedCount} lançamento(s) corrigido(s) de ID quebrado para "napista".`, 'warn');
     }
 
     log('');
