@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Migração única - Arena Motors</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<style>
+  body{ background:#0a0a0a; color:#f5f5f0; font-family:monospace; padding:24px; max-width:800px; margin:0 auto; }
+  h1{ font-size:18px; margin-bottom:16px; }
+  button{ background:#ffd100; color:#0a0a0a; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px; }
+  button:disabled{ opacity:0.5; cursor:not-allowed; }
+  #log{ margin-top:20px; background:#141414; border:1px solid #2c2c2c; border-radius:8px; padding:16px; white-space:pre-wrap; font-size:13px; line-height:1.6; max-height:500px; overflow:auto; }
+  .ok{ color:#3ddc97; }
+  .err{ color:#ff6b4a; }
+  .warn{ color:#ffe066; }
+</style>
+</head>
+<body>
+<h1>🔄 Migração única: Google Sheets → Firestore</h1>
+<p style="color:#9a9a92; font-size:13px; margin-bottom:16px;">Ferramenta de uso único. Depois de migrar, pode fechar essa página e não precisa mais dela.</p>
+<button id="btnMigrate">Iniciar migração</button>
+<div id="log"></div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyADj6CWOUh66_G7qMoFmLxzorSRmwzhG3Q",
+  authDomain: "arena-motors-dashboard.firebaseapp.com",
+  projectId: "arena-motors-dashboard",
+  storageBucket: "arena-motors-dashboard.firebasestorage.app",
+  messagingSenderId: "668179364218",
+  appId: "1:668179364218:web:7fc08915222efb30c13ec3"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4-Hjg_fKyrhAKlPfHJ2wWWYq99QkVpH_Z4aVzu9TTtjihfzdhxU4sBF3cq-P-CFvNPw/exec';
+const APPS_SCRIPT_TOKEN = '20ae7f792d18525b37182be5afcda2b6';
+
+const logEl = document.getElementById('log');
+function log(msg, cls=''){
+  const line = document.createElement('div');
+  if(cls) line.className = cls;
+  line.textContent = msg;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+async function fetchOld(action){
+  const cacheBust = Date.now() + '-' + Math.random().toString(36).slice(2);
+  const url = `${APPS_SCRIPT_URL}?action=${action}&token=${APPS_SCRIPT_TOKEN}&_=${cacheBust}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  const json = await res.json();
+  if(json.error) throw new Error(json.error);
+  return json.data;
+}
+
+document.getElementById('btnMigrate').addEventListener('click', async ()=>{
+  document.getElementById('btnMigrate').disabled = true;
+  logEl.innerHTML = '';
+  try{
+    log('Autenticando no Firebase...');
+    await new Promise((resolve, reject)=>{
+      const t = setTimeout(()=>reject(new Error('timeout na autenticação')), 15000);
+      firebase.auth().onAuthStateChanged(u=>{ if(u){ clearTimeout(t); resolve(); } });
+      firebase.auth().signInAnonymously().catch(reject);
+    });
+    log('Autenticado.', 'ok');
+
+    log('Buscando CONFIG da planilha antiga...');
+    const oldConfig = await fetchOld('config');
+    log(`Encontrados ${oldConfig.length} portais na planilha.`, 'ok');
+
+    log('Buscando ENTRIES da planilha antiga...');
+    const oldEntries = await fetchOld('entries');
+    log(`Encontrados ${oldEntries.length} lançamentos na planilha.`, 'ok');
+
+    log('Gravando CONFIG no Firestore...');
+    const batch1 = db.batch();
+    oldConfig.forEach(p=>{
+      const clean = { id: String(p.id), name: String(p.name), fee: Number(p.fee||0), promised: Number(p.promised||0) };
+      batch1.set(db.collection('config').doc(clean.id), clean);
+    });
+    await batch1.commit();
+    log(`${oldConfig.length} portais gravados no Firestore.`, 'ok');
+
+    log('Gravando ENTRIES no Firestore...');
+    const batch2 = db.batch();
+    let fixedCount = 0;
+    oldEntries.forEach(e=>{
+      let portalId = String(e.portalId);
+      // Corrige o ID quebrado identificado (era pra ser "napista")
+      if(portalId === '4egceuwpmr53ogp2'){
+        portalId = 'napista';
+        fixedCount++;
+      }
+      const clean = {
+        id: String(e.id), shoppingId: String(e.shoppingId), portalId,
+        date: String(e.date), portalLeads: Number(e.portalLeads||0), crmLeads: Number(e.crmLeads||0)
+      };
+      batch2.set(db.collection('entries').doc(clean.id), clean);
+    });
+    await batch2.commit();
+    log(`${oldEntries.length} lançamentos gravados no Firestore.`, 'ok');
+    if(fixedCount > 0){
+      log(`${fixedCount} lançamento(s) tiveram o portalId corrigido de ID quebrado para "napista".`, 'warn');
+    }
+
+    log('');
+    log('✅ MIGRAÇÃO CONCLUÍDA. Pode fechar essa página e voltar pro painel.', 'ok');
+  }catch(err){
+    log('ERRO: ' + err.message, 'err');
+    document.getElementById('btnMigrate').disabled = false;
+  }
+});
+</script>
+</body>
+</html>
