@@ -7,6 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
   :root{
     --bg:#0a0a0a;
@@ -367,57 +370,19 @@ const SHOPPINGS = [
 let state = { config: [], entries: [] };
 let barChart, lineChart;
 
-// ---------- BACKEND: Google Apps Script (Google Sheets) ----------
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4-Hjg_fKyrhAKlPfHJ2wWWYq99QkVpH_Z4aVzu9TTtjihfzdhxU4sBF3cq-P-CFvNPw/exec';
-const APPS_SCRIPT_TOKEN = '20ae7f792d18525b37182be5afcda2b6';
-
-function withTimeout(promise, ms=25000){
-  let timeoutId;
-  const timeoutPromise = new Promise((resolve)=>{
-    timeoutId = setTimeout(()=> resolve('__TIMEOUT__'), ms);
-  });
-  return Promise.race([promise, timeoutPromise]).then((result)=>{
-    clearTimeout(timeoutId);
-    if(result === '__TIMEOUT__'){
-      throw new Error(`sem resposta do servidor em ${ms/1000}s (timeout)`);
-    }
-    return result;
-  });
-}
-
-async function apiGet(action, timeoutMs=15000){
-  const cacheBust = Date.now() + '-' + Math.random().toString(36).slice(2);
-  const url = `${APPS_SCRIPT_URL}?action=${action}&token=${APPS_SCRIPT_TOKEN}&_=${cacheBust}`;
-  const res = await withTimeout(fetch(url, { cache: 'no-store' }), timeoutMs);
-  const json = await res.json();
-  if(json.error) throw new Error(json.error);
-  return json.data;
-}
-
-async function apiGetWithRetry(action, retries=3){
-  let lastErr;
-  for(let i=0; i<=retries; i++){
-    try{
-      return await apiGet(action, 15000 + (i*10000)); // 15s, 25s, 35s, 45s - dá mais tempo a cada tentativa
-    }catch(e){
-      lastErr = e;
-      if(i < retries) await new Promise(r=>setTimeout(r, 1000));
-    }
-  }
-  throw lastErr;
-}
-
-async function apiPost(action, data){
-  const res = await withTimeout(fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    cache: 'no-store',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS
-    body: JSON.stringify({ action, data, token: APPS_SCRIPT_TOKEN })
-  }));
-  const json = await res.json();
-  if(json.error) throw new Error(json.error);
-  return json;
-}
+// ---------- BACKEND: Firebase Firestore (tempo real, sem cold start, sem cache) ----------
+const firebaseConfig = {
+  apiKey: "AIzaSyADj6CWOUh66_G7qMoFmLxzorSRmwzhG3Q",
+  authDomain: "arena-motors-dashboard.firebaseapp.com",
+  projectId: "arena-motors-dashboard",
+  storageBucket: "arena-motors-dashboard.firebasestorage.app",
+  messagingSenderId: "668179364218",
+  appId: "1:668179364218:web:7fc08915222efb30c13ec3"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const configCol = db.collection('config');
+const entriesCol = db.collection('entries');
 
 function normalizeConfigRow(p){
   return { id: String(p.id), name: String(p.name), fee: Number(p.fee||0), promised: Number(p.promised||0) };
@@ -429,49 +394,71 @@ function normalizeEntryRow(e){
   };
 }
 
+let _liveListenersStarted = false;
+
+async function waitForAuth(){
+  return new Promise((resolve, reject)=>{
+    const t = setTimeout(()=> reject(new Error('timeout ao autenticar no Firebase')), 15000);
+    firebase.auth().onAuthStateChanged((user)=>{
+      if(user){ clearTimeout(t); resolve(user); }
+    });
+    firebase.auth().signInAnonymously().catch((err)=>{ clearTimeout(t); reject(err); });
+  });
+}
+
 async function loadState(){
-  let configFailed = false;
-  let entriesFailed = false;
+  await waitForAuth();
 
-  try{
-    const c = await apiGetWithRetry('config');
-    state.config = c ? c.map(normalizeConfigRow) : [];
-  }catch(e){
-    console.error('Erro ao carregar config', e);
-    configFailed = true;
-    state.config = [];
+  // Primeira carga: verifica se a config já existe; se não existir de verdade, semeia o padrão uma única vez.
+  const snap = await configCol.get();
+  if(snap.empty){
+    const batch = db.batch();
+    DEFAULT_PORTALS.forEach(p=> batch.set(configCol.doc(p.id), p));
+    await batch.commit();
   }
 
-  if(configFailed){
-    // FALHA DE REDE: nunca regravar a planilha nesse caso, só avisar e usar padrão só na tela
-    showFatalError('Não foi possível carregar a configuração dos portais (falha de conexão). Os dados salvos NÃO foram alterados. Recarregue a página em alguns segundos.');
-    state.config = DEFAULT_PORTALS;
-  } else if(state.config.length === 0){
-    // Backend confirmou vazio de verdade (primeira vez) -> aí sim semeia o padrão
-    state.config = DEFAULT_PORTALS;
-    await saveConfig();
-  }
+  // Carrega o estado inicial de uma vez (pra renderizar já na primeira tela)
+  const [configSnap, entriesSnap] = await Promise.all([configCol.get(), entriesCol.get()]);
+  state.config = configSnap.docs.map(d=>normalizeConfigRow(d.data()));
+  state.entries = entriesSnap.docs.map(d=>normalizeEntryRow(d.data()));
 
-  try{
-    const e = await apiGetWithRetry('entries');
-    state.entries = e ? e.map(normalizeEntryRow) : [];
-  }catch(e){
-    console.error('Erro ao carregar lançamentos', e);
-    entriesFailed = true;
-    state.entries = [];
-    showFatalError('Não foi possível carregar os lançamentos (falha de conexão). Recarregue a página em alguns segundos.');
-  }
-
-  state._loadFailed = configFailed || entriesFailed;
+  startLiveSync();
 }
 
-async function saveConfig(){
-  try{ await apiPost('saveConfig', state.config); }
-  catch(e){ showFatalError('Erro ao salvar config: ' + e.message); }
+function startLiveSync(){
+  if(_liveListenersStarted) return;
+  _liveListenersStarted = true;
+
+  configCol.onSnapshot((snap)=>{
+    state.config = snap.docs.map(d=>normalizeConfigRow(d.data()));
+    renderConfigTable();
+    renderEntryPortalSelect();
+    renderDashboard();
+  }, (err)=> showFatalError('Erro na sincronização da config: ' + err.message));
+
+  entriesCol.onSnapshot((snap)=>{
+    state.entries = snap.docs.map(d=>normalizeEntryRow(d.data()));
+    renderEntriesTable();
+    renderMonthSelect();
+    renderDashboard();
+  }, (err)=> showFatalError('Erro na sincronização dos lançamentos: ' + err.message));
 }
-async function saveEntries(){
-  try{ await apiPost('saveEntries', state.entries); }
-  catch(e){ showFatalError('Erro ao salvar lançamentos: ' + e.message); }
+
+async function fbSaveConfigItem(portal){
+  try{ await configCol.doc(portal.id).set(portal); }
+  catch(e){ showFatalError('Erro ao salvar portal: ' + e.message); }
+}
+async function fbDeleteConfigItem(id){
+  try{ await configCol.doc(id).delete(); }
+  catch(e){ showFatalError('Erro ao remover portal: ' + e.message); }
+}
+async function fbSaveEntry(entry){
+  try{ await entriesCol.doc(entry.id).set(entry); }
+  catch(e){ showFatalError('Erro ao salvar lançamento: ' + e.message); }
+}
+async function fbDeleteEntry(id){
+  try{ await entriesCol.doc(id).delete(); }
+  catch(e){ showFatalError('Erro ao remover lançamento: ' + e.message); }
 }
 
 // ---------- TABS ----------
@@ -759,23 +746,15 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
     portalLeads: Number(document.getElementById('entryPortalLeads').value||0),
     crmLeads: Number(document.getElementById('entryCrmLeads').value||0),
   };
-  state.entries.push(entry);
-  await saveEntries();
+  await fbSaveEntry(entry);
   ev.target.reset();
   document.getElementById('entryDate').value = new Date().toISOString().slice(0,10);
   renderEntryShoppingSelect();
-  renderEntriesTable();
-  renderMonthSelect();
-  renderDashboard();
 });
 
 
 window.deleteEntry = async (id)=>{
-  state.entries = state.entries.filter(e=>e.id!==id);
-  await saveEntries();
-  renderEntriesTable();
-  renderMonthSelect();
-  renderDashboard();
+  await fbDeleteEntry(id);
 };
 
 // ---------- RENDER: CONFIG ----------
@@ -793,27 +772,26 @@ function renderConfigTable(){
 
 window.updatePortal = async (id, field, value)=>{
   const p = state.config.find(p=>p.id===id);
-  if(p){ p[field] = Number(value||0); await saveConfig(); renderDashboard(); }
+  if(p){
+    const updated = { ...p, [field]: Number(value||0) };
+    await fbSaveConfigItem(updated);
+  }
 };
 window.deletePortal = async (id)=>{
-  state.config = state.config.filter(p=>p.id!==id);
-  await saveConfig();
-  renderConfigTable();
-  renderEntryPortalSelect();
-  renderDashboard();
+  await fbDeleteConfigItem(id);
 };
 
 document.getElementById('portalForm').addEventListener('submit', async (ev)=>{
   ev.preventDefault();
   const name = document.getElementById('newPortalName').value.trim();
   if(!name) return;
-  state.config.push({
+  const newPortal = {
     id: uid(),
     name,
     fee: Number(document.getElementById('newPortalFee').value||0),
     promised: Number(document.getElementById('newPortalPromised').value||0),
-  });
-  await saveConfig();
+  };
+  await fbSaveConfigItem(newPortal);
   ev.target.reset();
   renderConfigTable();
   renderEntryPortalSelect();
