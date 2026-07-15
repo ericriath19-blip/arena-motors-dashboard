@@ -698,6 +698,7 @@ function renderDashboard(){
   const isFiltered = shoppingId && shoppingId!=='all';
   const shoppingName = isFiltered ? (SHOPPINGS.find(s=>s.id===shoppingId)||{}).name : null;
   const {rows, totals, numMonths} = computeRangeStats(start, end, shoppingId);
+  const { totals: totalsAllShoppings } = computeRangeStats(start, end, 'all');
   const feeNote = isFiltered ? 'valor total do contrato do portal (não dividido por shopping)' : `${numMonths} ${numMonths===1?'mês':'meses'} · ${formatMonthLabel(start)} a ${formatMonthLabel(end)}`;
 
   // summary strip
@@ -724,13 +725,13 @@ function renderDashboard(){
     </div>
     <div class="summary-card">
       <div class="label">Prometido x CRM</div>
-      <div class="value bad">${totals.leakPct.toFixed(1)}%</div>
-      <div class="sub">${fmtNum(totals.promisedTotal)} prometidos pelos portais x ${fmtNum(totals.crmLeads)} recebidos no CRM</div>
+      <div class="value bad">${totalsAllShoppings.leakPct.toFixed(1)}%</div>
+      <div class="sub">${fmtNum(totalsAllShoppings.promisedTotal)} prometidos pelos portais x ${fmtNum(totalsAllShoppings.crmLeads)} recebidos no CRM</div>
     </div>
     <div class="summary-card">
       <div class="label">Leads não entregues pelos portais</div>
-      <div class="value bad">${totals.promiseGapPct.toFixed(1)}%</div>
-      <div class="sub">${fmtNum(totals.promisedTotal)} prometidos x ${fmtNum(totals.portalLeads)} recebidos pelos portais</div>
+      <div class="value bad">${totalsAllShoppings.promiseGapPct.toFixed(1)}%</div>
+      <div class="sub">${fmtNum(totalsAllShoppings.promisedTotal)} prometidos x ${fmtNum(totalsAllShoppings.portalLeads)} recebidos pelos portais</div>
     </div>
   `;
 
