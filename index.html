@@ -277,6 +277,7 @@
   <nav class="tabs">
     <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
     <button class="tab-btn" data-tab="entries">Lançar dados</button>
+    <button class="tab-btn" data-tab="detailed">Tabela detalhada</button>
     <button class="tab-btn" data-tab="config">Configurar portais</button>
   </nav>
 
@@ -371,6 +372,59 @@
         <tbody id="entriesBody"></tbody>
       </table>
       <div class="empty-state" id="entriesEmpty" style="display:none;">Nenhum lançamento ainda. Adicione o primeiro acima.</div>
+    </div>
+  </div>
+
+  <!-- DETAILED TABLE TAB -->
+  <div class="tab-content" id="tab-detailed">
+    <div class="panel">
+      <h3>Filtros</h3>
+      <form class="inline-form" id="detailedFilterForm" onsubmit="return false;">
+        <div class="field">
+          <label>Shopping</label>
+          <select id="detShopping"><option value="all">Todos</option></select>
+        </div>
+        <div class="field">
+          <label>Portal</label>
+          <select id="detPortal"><option value="all">Todos</option></select>
+        </div>
+        <div class="field">
+          <label>Período de</label>
+          <select id="detMonthStart"></select>
+        </div>
+        <div class="field">
+          <label>até</label>
+          <select id="detMonthEnd"></select>
+        </div>
+        <div class="field">
+          <label>Leads no portal (min)</label>
+          <input type="number" id="detPortalMin" min="0" placeholder="0" style="min-width:80px;">
+        </div>
+        <div class="field">
+          <label>Leads no portal (max)</label>
+          <input type="number" id="detPortalMax" min="0" placeholder="—" style="min-width:80px;">
+        </div>
+        <div class="field">
+          <label>Leads no CRM (min)</label>
+          <input type="number" id="detCrmMin" min="0" placeholder="0" style="min-width:80px;">
+        </div>
+        <div class="field">
+          <label>Leads no CRM (max)</label>
+          <input type="number" id="detCrmMax" min="0" placeholder="—" style="min-width:80px;">
+        </div>
+        <button type="button" class="ghost" onclick="clearDetailedFilters()">Limpar filtros</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h3>Tabela detalhada <span id="detailedCount" style="color:var(--text-dim); font-weight:400; font-size:12px;"></span></h3>
+      <table id="detailedTable">
+        <thead>
+          <tr><th>Data</th><th>Shopping</th><th>Portal</th><th>Leads portal</th><th>Leads CRM</th><th>Divergência</th></tr>
+        </thead>
+        <tbody id="detailedBody"></tbody>
+      </table>
+      <div class="empty-state" id="detailedEmpty" style="display:none;">Nenhum lançamento encontrado com esses filtros.</div>
     </div>
   </div>
 
@@ -516,6 +570,8 @@ function startLiveSync(){
     renderConfigTable();
     renderEntryPortalSelect();
     renderDashboard();
+    renderDetailedFilters();
+    renderDetailedTable();
   }, (err)=> showFatalError('Erro na sincronização da config: ' + err.message));
 
   entriesCol.onSnapshot((snap)=>{
@@ -523,6 +579,8 @@ function startLiveSync(){
     renderEntriesTable();
     renderMonthSelect();
     renderDashboard();
+    renderDetailedFilters();
+    renderDetailedTable();
   }, (err)=> showFatalError('Erro na sincronização dos lançamentos: ' + err.message));
 }
 
@@ -988,6 +1046,84 @@ window.deleteEntry = async (id)=>{
   await fbDeleteEntry(id);
 };
 
+// ---------- RENDER: TABELA DETALHADA ----------
+function renderDetailedFilters(){
+  const shopSel = document.getElementById('detShopping');
+  shopSel.innerHTML = '<option value="all">Todos</option>' + SHOPPINGS.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+
+  const portalSel = document.getElementById('detPortal');
+  portalSel.innerHTML = '<option value="all">Todos</option>' + state.config.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+
+  const months = monthsAvailable().slice().sort();
+  const startSel = document.getElementById('detMonthStart');
+  const endSel = document.getElementById('detMonthEnd');
+  const prevStart = startSel.value, prevEnd = endSel.value;
+  const optionsHtml = months.map(m=>`<option value="${m}">${formatMonthLabel(m)}</option>`).join('');
+  startSel.innerHTML = optionsHtml;
+  endSel.innerHTML = optionsHtml;
+  startSel.value = months.includes(prevStart) ? prevStart : months[0];
+  endSel.value = months.includes(prevEnd) ? prevEnd : months[months.length-1];
+}
+
+window.clearDetailedFilters = ()=>{
+  document.getElementById('detShopping').value = 'all';
+  document.getElementById('detPortal').value = 'all';
+  const months = monthsAvailable().slice().sort();
+  document.getElementById('detMonthStart').value = months[0];
+  document.getElementById('detMonthEnd').value = months[months.length-1];
+  document.getElementById('detPortalMin').value = '';
+  document.getElementById('detPortalMax').value = '';
+  document.getElementById('detCrmMin').value = '';
+  document.getElementById('detCrmMax').value = '';
+  renderDetailedTable();
+};
+
+function renderDetailedTable(){
+  const shoppingId = document.getElementById('detShopping').value;
+  const portalId = document.getElementById('detPortal').value;
+  const start = document.getElementById('detMonthStart').value;
+  const end = document.getElementById('detMonthEnd').value;
+  const portalMin = document.getElementById('detPortalMin').value;
+  const portalMax = document.getElementById('detPortalMax').value;
+  const crmMin = document.getElementById('detCrmMin').value;
+  const crmMax = document.getElementById('detCrmMax').value;
+
+  let filtered = state.entries.filter(e=>{
+    if(shoppingId!=='all' && e.shoppingId!==shoppingId) return false;
+    if(portalId!=='all' && e.portalId!==portalId) return false;
+    if(start && monthKey(e.date) < start) return false;
+    if(end && monthKey(e.date) > end) return false;
+    if(portalMin!=='' && Number(e.portalLeads||0) < Number(portalMin)) return false;
+    if(portalMax!=='' && Number(e.portalLeads||0) > Number(portalMax)) return false;
+    if(crmMin!=='' && Number(e.crmLeads||0) < Number(crmMin)) return false;
+    if(crmMax!=='' && Number(e.crmLeads||0) > Number(crmMax)) return false;
+    return true;
+  });
+  filtered.sort((a,b)=> b.date.localeCompare(a.date));
+
+  document.getElementById('detailedCount').textContent = `(${filtered.length} lançamento${filtered.length===1?'':'s'})`;
+  document.getElementById('detailedEmpty').style.display = filtered.length ? 'none' : 'block';
+  document.getElementById('detailedBody').innerHTML = filtered.map(e=>{
+    const portal = state.config.find(p=>p.id===e.portalId);
+    const shopping = SHOPPINGS.find(s=>s.id===e.shoppingId);
+    const leaked = Math.max(Number(e.portalLeads||0) - Number(e.crmLeads||0), 0);
+    const pct = e.portalLeads>0 ? (leaked/e.portalLeads*100) : 0;
+    return `<tr>
+      <td>${formatDateBR(e.date)}</td>
+      <td class="name">${shopping ? shopping.name : '—'}</td>
+      <td class="name">${portal ? portal.name : '—'}</td>
+      <td>${fmtNum(e.portalLeads)}</td>
+      <td>${fmtNum(e.crmLeads)}</td>
+      <td><span class="pill ${leakPill(pct)}">${pct.toFixed(0)}%</span></td>
+    </tr>`;
+  }).join('');
+}
+
+['detShopping','detPortal','detMonthStart','detMonthEnd','detPortalMin','detPortalMax','detCrmMin','detCrmMax'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderDetailedTable);
+  document.getElementById(id).addEventListener('change', renderDetailedTable);
+});
+
 // ---------- RENDER: CONFIG ----------
 function renderConfigTable(){
   const body = document.getElementById('configBody');
@@ -1153,6 +1289,8 @@ async function startApp(){
     renderEntryPortalSelect();
     renderConfigTable();
     renderEntriesTable();
+    renderDetailedFilters();
+    renderDetailedTable();
     renderDashboard();
   }catch(err){
     showFatalError('Erro ao carregar o painel: ' + err.message);
