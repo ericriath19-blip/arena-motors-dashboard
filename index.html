@@ -643,8 +643,13 @@ function computeRangeStats(start, end, shoppingId){
     portalLeads: rows.reduce((s,r)=>s+r.portalLeads,0),
     leakLoss: rows.reduce((s,r)=>s+r.leakLoss,0),
     promiseLoss: rows.reduce((s,r)=>s+r.promiseLoss,0),
+    leaked: rows.reduce((s,r)=>s+r.leaked,0),
+    promisedTotal: rows.reduce((s,r)=>s+r.promisedTotal,0),
+    promiseGap: rows.reduce((s,r)=>s+Math.max(r.promisedTotal-r.portalLeads,0),0),
   };
   totals.avgCost = totals.crmLeads>0 ? totals.fee/totals.crmLeads : 0;
+  totals.leakPct = totals.promisedTotal>0 ? (totals.leaked/totals.promisedTotal*100) : 0;
+  totals.promiseGapPct = totals.promisedTotal>0 ? (totals.promiseGap/totals.promisedTotal*100) : 0;
   return {rows, totals, numMonths};
 }
 
@@ -713,13 +718,13 @@ function renderDashboard(){
     </div>
     <div class="summary-card">
       <div class="label">Lead não entregue Portais x CRM</div>
-      <div class="value bad">${fmtBRL(totals.leakLoss)}</div>
-      <div class="sub">portal não virou lead no CRM</div>
+      <div class="value bad">${totals.leakPct.toFixed(1)}%</div>
+      <div class="sub">${fmtBRL(totals.leakLoss)} · prometido não virou lead no CRM</div>
     </div>
     <div class="summary-card">
       <div class="label">Leads não entregues pelos portais</div>
-      <div class="value bad">${fmtBRL(totals.promiseLoss)}</div>
-      <div class="sub">abaixo do prometido pelo portal</div>
+      <div class="value bad">${totals.promiseGapPct.toFixed(1)}%</div>
+      <div class="sub">${fmtBRL(totals.promiseLoss)} · abaixo do prometido pelo portal</div>
     </div>
     <div class="summary-card">
       <div class="label">Leads entregues pelos portais</div>
