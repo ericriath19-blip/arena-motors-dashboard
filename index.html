@@ -926,7 +926,7 @@ function renderProjectionChart(canvasId, lineElId, metricKey, shoppingId, target
 function renderProjections(shoppingId){
   if(projCrmChart) projCrmChart.destroy();
   if(projPortalChart) projPortalChart.destroy();
-  projCrmChart = renderProjectionChart('projCrmChart', 'projCrmLine', 'crmLeads', shoppingId);
+  projCrmChart = renderProjectionChart('projCrmChart', 'projCrmLine', 'crmLeads', shoppingId, 6610);
   projPortalChart = renderProjectionChart('projPortalChart', 'projPortalLine', 'portalLeads', shoppingId, 6610);
 }
 
