@@ -724,7 +724,7 @@ function renderDashboard(){
     <div class="summary-card">
       <div class="label">Prometido x CRM</div>
       <div class="value bad">${totals.leakPct.toFixed(1)}%</div>
-      <div class="sub">${fmtBRL(totals.leakLoss)} · Recebido pelo Portal mas não entrou no CRM</div>
+      <div class="sub">${fmtNum(totals.promisedTotal)} prometidos pelos portais x ${fmtNum(totals.crmLeads)} recebidos no CRM</div>
     </div>
     <div class="summary-card">
       <div class="label">Leads não entregues pelos portais</div>
