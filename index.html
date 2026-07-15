@@ -118,7 +118,20 @@
   .grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(300px,1fr)); gap:16px; margin-bottom:28px;}
   .portal-card{
     background:var(--surface); border:1px solid var(--border); border-radius:14px;
-    padding:18px;
+    padding:18px; position:relative; overflow:hidden;
+  }
+  .portal-card::before{
+    content:''; position:absolute; top:0; left:0; right:0; height:4px;
+    background: var(--strip-color, transparent);
+  }
+  .portal-card[data-portal="webmotors"]{ --strip-color: #EF4444; }
+  .portal-card[data-portal="olx"]{ --strip-color: #8B5CF6; }
+  .portal-card[data-portal="usadosbr"]{ --strip-color: #22C55E; }
+  .portal-card[data-portal="napista"]{ --strip-color: #4169E1; }
+  .portal-card[data-portal="mobiauto"]{ --strip-color: #2DD4BF; }
+  .portal-card[data-portal="icarros"]{ --strip-color: #F97316; }
+  .portal-card[data-portal="site-proprio"]::before{
+    background: linear-gradient(90deg, #FFDB00 0% 25%, #B2CB1C 25% 50%, #1B4F91 50% 75%, #E0010F 75% 100%);
   }
   .portal-card .pc-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
   .portal-card h3{font-family:var(--font-display); font-size:16px; font-weight:600;}
@@ -623,7 +636,7 @@ function renderDashboard(){
     const color = leakColor(r.leakPct);
     const pillClass = leakPill(r.leakPct);
     return `
-    <div class="portal-card">
+    <div class="portal-card" data-portal="${r.portal.id}">
       <div class="pc-head">
         <div class="pc-title">
           ${PORTAL_LOGOS[r.portal.id] ? `<img class="portal-logo" data-portal="${r.portal.id}" src="${PORTAL_LOGOS[r.portal.id]}" alt="${r.portal.name}">` : `<h3>${r.portal.name}</h3>`}
