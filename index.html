@@ -123,7 +123,7 @@
   .portal-card .pc-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
   .portal-card h3{font-family:var(--font-display); font-size:16px; font-weight:600;}
   .pc-title{display:flex; align-items:center; gap:8px; min-width:0;}
-  .portal-logo{height:19px; width:auto; max-width:80px; object-fit:contain; display:block; flex-shrink:0;}
+  .portal-logo{height:32px; width:auto; max-width:160px; object-fit:contain; display:block; flex-shrink:0;}
   .pill{font-family:var(--font-mono); font-size:10px; padding:3px 8px; border-radius:100px; text-transform:uppercase; letter-spacing:.05em;}
   .pill.good{background:var(--good-dim); color:var(--good);}
   .pill.warn{background:var(--warn-dim); color:var(--warn);}
@@ -620,8 +620,7 @@ function renderDashboard(){
     <div class="portal-card">
       <div class="pc-head">
         <div class="pc-title">
-          ${PORTAL_LOGOS[r.portal.id] ? `<img class="portal-logo" src="${PORTAL_LOGOS[r.portal.id]}" alt="">` : ''}
-          <h3>${r.portal.name}</h3>
+          ${PORTAL_LOGOS[r.portal.id] ? `<img class="portal-logo" src="${PORTAL_LOGOS[r.portal.id]}" alt="${r.portal.name}">` : `<h3>${r.portal.name}</h3>`}
         </div>
         <span class="pill ${pillClass}">${r.leakPct.toFixed(0)}% vazamento</span>
       </div>
