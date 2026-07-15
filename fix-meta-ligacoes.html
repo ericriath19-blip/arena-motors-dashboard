@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Diagnóstico/Correção - Meta e Ligações</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<style>
+  body{ background:#0a0a0a; color:#f5f5f0; font-family:monospace; padding:24px; max-width:800px; margin:0 auto; }
+  h1{ font-size:18px; margin-bottom:16px; }
+  button{ background:#ffd100; color:#0a0a0a; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px; margin-right:8px;}
+  button:disabled{ opacity:0.5; cursor:not-allowed; }
+  #log{ margin-top:20px; background:#141414; border:1px solid #2c2c2c; border-radius:8px; padding:16px; white-space:pre-wrap; font-size:13px; line-height:1.6; max-height:500px; overflow:auto; }
+  .ok{ color:#3ddc97; }
+  .err{ color:#ff6b4a; }
+  .warn{ color:#ffe066; }
+</style>
+</head>
+<body>
+<h1>🔍 Diagnóstico: portais "Meta" e "Ligações"</h1>
+<button id="btnDiag">1. Diagnosticar</button>
+<button id="btnFix" disabled>2. Corrigir</button>
+<div id="log"></div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyADj6CWOUh66_G7qMoFmLxzorSRmwzhG3Q",
+  authDomain: "arena-motors-dashboard.firebaseapp.com",
+  projectId: "arena-motors-dashboard",
+  storageBucket: "arena-motors-dashboard.firebasestorage.app",
+  messagingSenderId: "668179364218",
+  appId: "1:668179364218:web:7fc08915222efb30c13ec3"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const TARGETS = [
+  { keyword: 'meta', canonicalId: 'meta' },
+  { keyword: 'liga', canonicalId: 'ligacoes' },
+];
+
+const logEl = document.getElementById('log');
+function log(msg, cls=''){
+  const line = document.createElement('div');
+  if(cls) line.className = cls;
+  line.textContent = msg;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+async function ensureAuth(){
+  await new Promise((resolve, reject)=>{
+    const t = setTimeout(()=>reject(new Error('timeout na autenticação')), 15000);
+    firebase.auth().onAuthStateChanged(u=>{ if(u){ clearTimeout(t); resolve(); } });
+    firebase.auth().signInAnonymously().catch(reject);
+  });
+}
+
+let fixPlan = [];
+
+document.getElementById('btnDiag').addEventListener('click', async ()=>{
+  logEl.innerHTML = '';
+  document.getElementById('btnDiag').disabled = true;
+  fixPlan = [];
+  try{
+    log('Autenticando...');
+    await ensureAuth();
+    log('Autenticado.', 'ok');
+
+    log('Lendo todos os documentos de "config"...');
+    const snap = await db.collection('config').get();
+    log(`Total de documentos: ${snap.docs.length}`, 'ok');
+    log('');
+    snap.docs.forEach(d=>{
+      const data = d.data();
+      log(`  doc.id="${d.id}"  name="${data.name}"  fee=${data.fee}  promised=${data.promised}`);
+    });
+    log('');
+
+    TARGETS.forEach(t=>{
+      const matches = snap.docs.filter(d => (d.data().name||'').toLowerCase().includes(t.keyword));
+      if(matches.length === 0){
+        log(`"${t.keyword}": nenhum doc encontrado.`, 'err');
+        return;
+      }
+      if(matches.length > 1){
+        log(`"${t.keyword}": mais de um doc encontrado (${matches.length}). Vou usar o primeiro e sinalizar os outros.`, 'warn');
+      }
+      const doc = matches[0];
+      if(doc.id === t.canonicalId){
+        log(`"${doc.data().name}": id já está correto ("${doc.id}"). Nada a fazer.`, 'ok');
+      } else {
+        log(`"${doc.data().name}": id atual é "${doc.id}", devia ser "${t.canonicalId}". Corrigível.`, 'warn');
+        fixPlan.push({ oldId: doc.id, canonicalId: t.canonicalId, data: doc.data() });
+      }
+    });
+
+    if(fixPlan.length > 0){
+      log('');
+      log(`${fixPlan.length} correção(ões) pronta(s) pra aplicar.`, 'warn');
+      document.getElementById('btnFix').disabled = false;
+    } else {
+      log('');
+      log('Nada pra corrigir.', 'ok');
+    }
+  }catch(err){
+    log('ERRO: ' + err.message, 'err');
+  }
+  document.getElementById('btnDiag').disabled = false;
+});
+
+document.getElementById('btnFix').addEventListener('click', async ()=>{
+  document.getElementById('btnFix').disabled = true;
+  try{
+    for(const item of fixPlan){
+      log('');
+      log(`Criando doc canônico id="${item.canonicalId}" (mantendo nome "${item.data.name}")...`);
+      await db.collection('config').doc(item.canonicalId).set({
+        id: item.canonicalId, name: item.data.name,
+        fee: Number(item.data.fee||0), promised: Number(item.data.promised||0)
+      });
+      log('Gravado.', 'ok');
+      log(`Apagando doc antigo id="${item.oldId}"...`);
+      await db.collection('config').doc(item.oldId).delete();
+      log('Apagado.', 'ok');
+    }
+    log('');
+    log('✅ CORREÇÃO CONCLUÍDA. Volta pro painel e confere.', 'ok');
+  }catch(err){
+    log('ERRO: ' + err.message, 'err');
+    document.getElementById('btnFix').disabled = false;
+  }
+});
+</script>
+</body>
+</html>
