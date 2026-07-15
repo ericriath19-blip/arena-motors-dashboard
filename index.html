@@ -871,7 +871,7 @@ function computeProjection(metricKey, shoppingId){
   return { months, summaryText };
 }
 
-function renderProjectionChart(canvasId, lineElId, metricKey, shoppingId){
+function renderProjectionChart(canvasId, lineElId, metricKey, shoppingId, targetValue){
   const { months, summaryText } = computeProjection(metricKey, shoppingId);
   document.getElementById(lineElId).innerHTML = summaryText;
 
@@ -881,25 +881,37 @@ function renderProjectionChart(canvasId, lineElId, metricKey, shoppingId){
   const lastClosedIdx = months.map(m=>m.type).lastIndexOf('closed');
   const projData = months.map((m,i)=> i>=lastClosedIdx ? Math.round(m.value) : null);
 
+  const datasets = [
+    {
+      label:'Histórico (fechado)', data: closedData,
+      borderColor:'#ffd100', backgroundColor:'#ffd100',
+      pointRadius:6, pointHoverRadius:7, pointBackgroundColor:'#0a0a0a', pointBorderColor:'#ffd100', pointBorderWidth:2,
+      showLine:false,
+      datalabels:{ color:'#ffd100', font:{family:'Inter', weight:'bold', size:12}, align:'top', offset:8 }
+    },
+    {
+      label:'Projeção (tendência)', data: projData,
+      borderColor:'#4169E1', backgroundColor:'rgba(65,105,225,.08)',
+      borderDash:[6,4], tension:0, fill:false,
+      pointRadius:4, pointBackgroundColor:'#0a0a0a', pointBorderColor:'#4169E1', pointBorderWidth:2,
+      datalabels:{ color:'#8fa8f0', font:{family:'Inter', weight:'bold', size:11}, align:'top', offset:6,
+        formatter:(value, ctx)=> ctx.dataIndex===lastClosedIdx ? '' : fmtNum(value) }
+    },
+  ];
+
+  if(targetValue){
+    datasets.push({
+      label:`Meta de entrega (${fmtNum(targetValue)})`,
+      data: months.map(()=>targetValue),
+      borderColor:'#3ddc97', borderDash:[3,3], borderWidth:1.5,
+      pointRadius:0, fill:false, tension:0,
+      datalabels:{ display:false }
+    });
+  }
+
   return new Chart(ctx, {
     type:'line',
-    data:{ labels, datasets:[
-      {
-        label:'Histórico (fechado)', data: closedData,
-        borderColor:'#ffd100', backgroundColor:'#ffd100',
-        pointRadius:6, pointHoverRadius:7, pointBackgroundColor:'#0a0a0a', pointBorderColor:'#ffd100', pointBorderWidth:2,
-        showLine:false,
-        datalabels:{ color:'#ffd100', font:{family:'Inter', weight:'bold', size:12}, align:'top', offset:8 }
-      },
-      {
-        label:'Projeção (tendência)', data: projData,
-        borderColor:'#4169E1', backgroundColor:'rgba(65,105,225,.08)',
-        borderDash:[6,4], tension:0, fill:false,
-        pointRadius:4, pointBackgroundColor:'#0a0a0a', pointBorderColor:'#4169E1', pointBorderWidth:2,
-        datalabels:{ color:'#8fa8f0', font:{family:'Inter', weight:'bold', size:11}, align:'top', offset:6,
-          formatter:(value, ctx)=> ctx.dataIndex===lastClosedIdx ? '' : fmtNum(value) }
-      },
-    ]},
+    data:{ labels, datasets },
     options:{
       responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ labels:{ color:'#8b93a1', font:{family:'Inter'} } } },
@@ -915,7 +927,7 @@ function renderProjections(shoppingId){
   if(projCrmChart) projCrmChart.destroy();
   if(projPortalChart) projPortalChart.destroy();
   projCrmChart = renderProjectionChart('projCrmChart', 'projCrmLine', 'crmLeads', shoppingId);
-  projPortalChart = renderProjectionChart('projPortalChart', 'projPortalLine', 'portalLeads', shoppingId);
+  projPortalChart = renderProjectionChart('projPortalChart', 'projPortalLine', 'portalLeads', shoppingId, 6610);
 }
 
 function renderLineChart(){
