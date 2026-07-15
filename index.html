@@ -729,7 +729,7 @@ function renderDashboard(){
     <div class="summary-card">
       <div class="label">Leads não entregues pelos portais</div>
       <div class="value bad">${totals.promiseGapPct.toFixed(1)}%</div>
-      <div class="sub">${fmtBRL(totals.promiseLoss)} · abaixo do prometido pelo portal</div>
+      <div class="sub">${fmtNum(totals.promisedTotal)} prometidos x ${fmtNum(totals.portalLeads)} recebidos pelos portais</div>
     </div>
   `;
 
