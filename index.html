@@ -827,7 +827,17 @@ function computeProjection(metricKey, shoppingId){
 
   const filtered = state.entries.filter(e=> !shoppingId || shoppingId==='all' || e.shoppingId===shoppingId);
 
-  const prevMonthTotal = filtered.filter(e=>monthKey(e.date)===prevMonth).reduce((s,e)=>s+Number(e[metricKey]||0),0);
+  // todos os meses fechados com dado, em ordem cronológica (não só o mês anterior)
+  const historicalMonths = Array.from(new Set(filtered.map(e=>monthKey(e.date))))
+    .filter(m=> m && m < currentMonth)
+    .sort();
+
+  const totalsByMonth = {};
+  historicalMonths.forEach(m=>{
+    totalsByMonth[m] = filtered.filter(e=>monthKey(e.date)===m).reduce((s,e)=>s+Number(e[metricKey]||0),0);
+  });
+
+  const prevMonthTotal = totalsByMonth[prevMonth] || 0;
   const currentSoFar = filtered.filter(e=>monthKey(e.date)===currentMonth && e.date<=todayISO).reduce((s,e)=>s+Number(e[metricKey]||0),0);
 
   const dailyRate = daysElapsed>0 ? currentSoFar/daysElapsed : 0;
@@ -839,7 +849,7 @@ function computeProjection(metricKey, shoppingId){
   const next3 = next2 * (1+growthRate);
 
   const months = [
-    { key: prevMonth, label: monthShortLabel(prevMonth), value: prevMonthTotal, type:'closed' },
+    ...historicalMonths.map(m=> ({ key:m, label: monthShortLabel(m), value: totalsByMonth[m], type:'closed' })),
     { key: currentMonth, label: monthShortLabel(currentMonth)+' (proj.)', value: projectedCurrent, type:'proj' },
     { key: shiftMonthKey(currentMonth,1), label: monthShortLabel(shiftMonthKey(currentMonth,1)), value: next1, type:'proj' },
     { key: shiftMonthKey(currentMonth,2), label: monthShortLabel(shiftMonthKey(currentMonth,2)), value: next2, type:'proj' },
@@ -860,7 +870,8 @@ function renderProjectionChart(canvasId, lineElId, metricKey, shoppingId){
   const ctx = document.getElementById(canvasId);
   const labels = months.map(m=>m.label);
   const closedData = months.map(m=> m.type==='closed' ? Math.round(m.value) : null);
-  const projData = months.map(m=> Math.round(m.value));
+  const lastClosedIdx = months.map(m=>m.type).lastIndexOf('closed');
+  const projData = months.map((m,i)=> i>=lastClosedIdx ? Math.round(m.value) : null);
 
   return new Chart(ctx, {
     type:'line',
@@ -878,7 +889,7 @@ function renderProjectionChart(canvasId, lineElId, metricKey, shoppingId){
         borderDash:[6,4], tension:0, fill:false,
         pointRadius:4, pointBackgroundColor:'#0a0a0a', pointBorderColor:'#4169E1', pointBorderWidth:2,
         datalabels:{ color:'#8fa8f0', font:{family:'Inter', weight:'bold', size:11}, align:'top', offset:6,
-          formatter:(value, ctx)=> ctx.dataIndex===0 ? '' : fmtNum(value) }
+          formatter:(value, ctx)=> ctx.dataIndex===lastClosedIdx ? '' : fmtNum(value) }
       },
     ]},
     options:{
