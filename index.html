@@ -152,6 +152,8 @@
   .portal-card[data-portal="napista"]{ --strip-color: #4169E1; }
   .portal-card[data-portal="mobiauto"]{ --strip-color: #2DD4BF; }
   .portal-card[data-portal="icarros"]{ --strip-color: #F97316; }
+  .portal-card[data-portal="meta"]{ --strip-color: #3B82F6; }
+  .portal-card[data-portal="ligacoes"]{ --strip-color: #EC4899; }
   .portal-card[data-portal="site-proprio"]::before{
     background: linear-gradient(90deg, #FFDB00 0% 25%, #B2CB1C 25% 50%, #1B4F91 50% 75%, #E0010F 75% 100%);
   }
@@ -315,7 +317,7 @@
   <!-- ENTRIES TAB -->
   <div class="tab-content" id="tab-entries">
     <div class="panel">
-      <h3>Novo lançamento</h3>
+      <h3 id="entryFormTitle">Novo lançamento</h3>
       <form class="inline-form" id="entryForm">
         <div class="field">
           <label>Shopping</label>
@@ -337,7 +339,8 @@
           <label>Leads no CRM</label>
           <input type="number" id="entryCrmLeads" min="0" required style="min-width:90px;">
         </div>
-        <button type="submit" class="primary">Adicionar</button>
+        <button type="submit" class="primary" id="entrySubmitBtn">Adicionar</button>
+        <button type="button" class="ghost" id="entryCancelEditBtn" style="display:none;" onclick="cancelEditEntry()">Cancelar edição</button>
       </form>
     </div>
 
@@ -416,9 +419,10 @@ const PORTAL_LOGOS = {
   'usadosbr': 'logos/usadosbr.png',
   'mobiauto': 'logos/mobiauto.png',
   'icarros': 'logos/icarros.png',
+  'meta': 'logos/meta.png',
 };
 
-const PORTAL_ORDER = ['webmotors','usadosbr','olx','mobiauto','napista','site-proprio','icarros'];
+const PORTAL_ORDER = ['webmotors','usadosbr','olx','mobiauto','napista','site-proprio','icarros','meta','ligacoes'];
 
 const SHOPPINGS = [
   {id:'arena-sul', name:'Arena Sul'},
@@ -809,7 +813,10 @@ function renderEntriesTable(){
       <td>${fmtNum(e.portalLeads)}</td>
       <td>${fmtNum(e.crmLeads)}</td>
       <td><span class="pill ${leakPill(pct)}">${pct.toFixed(0)}%</span></td>
-      <td><button class="ghost" onclick="deleteEntry('${e.id}')">Remover</button></td>
+      <td>
+        <button class="ghost" onclick="editEntry('${e.id}')">Editar</button>
+        <button class="ghost" onclick="deleteEntry('${e.id}')">Remover</button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -818,10 +825,12 @@ function formatDateBR(d){
   return `${day}/${m}/${y}`;
 }
 
+let editingEntryId = null;
+
 document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
   ev.preventDefault();
   const entry = {
-    id: uid(),
+    id: editingEntryId || uid(),
     shoppingId: document.getElementById('entryShopping').value,
     portalId: document.getElementById('entryPortal').value,
     date: document.getElementById('entryDate').value,
@@ -832,8 +841,32 @@ document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
   ev.target.reset();
   document.getElementById('entryDate').value = new Date().toISOString().slice(0,10);
   renderEntryShoppingSelect();
+  if(editingEntryId){ cancelEditEntry(); }
 });
 
+window.editEntry = (id)=>{
+  const e = state.entries.find(e=>e.id===id);
+  if(!e) return;
+  editingEntryId = id;
+  document.getElementById('entryShopping').value = e.shoppingId;
+  document.getElementById('entryPortal').value = e.portalId;
+  document.getElementById('entryDate').value = e.date;
+  document.getElementById('entryPortalLeads').value = e.portalLeads;
+  document.getElementById('entryCrmLeads').value = e.crmLeads;
+  document.getElementById('entryFormTitle').textContent = 'Editando lançamento';
+  document.getElementById('entrySubmitBtn').textContent = 'Salvar edição';
+  document.getElementById('entryCancelEditBtn').style.display = 'inline-block';
+  document.getElementById('entryForm').scrollIntoView({behavior:'smooth', block:'center'});
+};
+
+window.cancelEditEntry = ()=>{
+  editingEntryId = null;
+  document.getElementById('entryForm').reset();
+  document.getElementById('entryDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('entryFormTitle').textContent = 'Novo lançamento';
+  document.getElementById('entrySubmitBtn').textContent = 'Adicionar';
+  document.getElementById('entryCancelEditBtn').style.display = 'none';
+};
 
 window.deleteEntry = async (id)=>{
   await fbDeleteEntry(id);
@@ -847,7 +880,7 @@ function renderConfigTable(){
       <td class="name">${p.name}</td>
       <td><input type="number" min="0" step="0.01" value="${p.fee}" onchange="updatePortal('${p.id}','fee',this.value)"></td>
       <td><input type="number" min="0" value="${p.promised}" onchange="updatePortal('${p.id}','promised',this.value)"></td>
-      <td><button class="ghost" onclick="deletePortal('${p.id}')">Remover</button></td>
+      <td><button class="ghost" onclick="editPortalName('${p.id}')">Editar</button> <button class="ghost" onclick="deletePortal('${p.id}')">Remover</button></td>
     </tr>
   `).join('');
 }
@@ -859,16 +892,36 @@ window.updatePortal = async (id, field, value)=>{
     await fbSaveConfigItem(updated);
   }
 };
+window.editPortalName = async (id)=>{
+  const p = state.config.find(p=>p.id===id);
+  if(!p) return;
+  const newName = prompt('Novo nome do portal:', p.name);
+  if(newName === null) return;
+  const trimmed = newName.trim();
+  if(!trimmed) return;
+  await fbSaveConfigItem({ ...p, name: trimmed });
+};
 window.deletePortal = async (id)=>{
   await fbDeleteConfigItem(id);
 };
+
+function slugify(name){
+  const base = name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  let finalId = base || uid();
+  let i = 2;
+  while(state.config.some(p=>p.id===finalId)){
+    finalId = `${base}-${i}`;
+    i++;
+  }
+  return finalId;
+}
 
 document.getElementById('portalForm').addEventListener('submit', async (ev)=>{
   ev.preventDefault();
   const name = document.getElementById('newPortalName').value.trim();
   if(!name) return;
   const newPortal = {
-    id: uid(),
+    id: slugify(name),
     name,
     fee: Number(document.getElementById('newPortalFee').value||0),
     promised: Number(document.getElementById('newPortalPromised').value||0),
