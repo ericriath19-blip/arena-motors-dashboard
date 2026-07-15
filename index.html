@@ -122,6 +122,8 @@
   }
   .portal-card .pc-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
   .portal-card h3{font-family:var(--font-display); font-size:16px; font-weight:600;}
+  .pc-title{display:flex; align-items:center; gap:8px; min-width:0;}
+  .portal-logo{height:19px; width:auto; max-width:80px; object-fit:contain; display:block; flex-shrink:0;}
   .pill{font-family:var(--font-mono); font-size:10px; padding:3px 8px; border-radius:100px; text-transform:uppercase; letter-spacing:.05em;}
   .pill.good{background:var(--good-dim); color:var(--good);}
   .pill.warn{background:var(--warn-dim); color:var(--warn);}
@@ -359,6 +361,16 @@ const DEFAULT_PORTALS = [
   {id:'usadosbr', name:'UsadosBR', fee:0, promised:0},
   {id:'mobiauto', name:'Mobiauto', fee:0, promised:0},
 ];
+
+const PORTAL_LOGOS = {
+  'site-proprio': 'logos/site-proprio.png',
+  'webmotors': 'logos/webmotors.png',
+  'olx': 'logos/olx.png',
+  'napista': 'logos/napista.png',
+  'usadosbr': 'logos/usadosbr.png',
+  'mobiauto': 'logos/mobiauto.png',
+  'icarros': 'logos/icarros.png',
+};
 
 const SHOPPINGS = [
   {id:'arena-sul', name:'Arena Sul'},
@@ -607,7 +619,10 @@ function renderDashboard(){
     return `
     <div class="portal-card">
       <div class="pc-head">
-        <h3>${r.portal.name}</h3>
+        <div class="pc-title">
+          ${PORTAL_LOGOS[r.portal.id] ? `<img class="portal-logo" src="${PORTAL_LOGOS[r.portal.id]}" alt="">` : ''}
+          <h3>${r.portal.name}</h3>
+        </div>
         <span class="pill ${pillClass}">${r.leakPct.toFixed(0)}% vazamento</span>
       </div>
       <div class="pc-body">
