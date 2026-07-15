@@ -203,6 +203,9 @@
   }
   .chart-card h3{font-family:var(--font-display); font-size:15px; margin-bottom:16px; font-weight:600;}
   .chart-wrap{position:relative; height:280px;}
+  .proj-sub{font-size:12px; color:var(--text-muted); line-height:1.5; margin-top:-10px; margin-bottom:12px;}
+  .proj-line{font-size:13px; color:var(--text); font-family:var(--font-mono); margin-bottom:16px;}
+  .proj-line b{color:var(--accent);}
 
   /* TABLES / FORMS */
   .panel{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px; margin-bottom:20px;}
@@ -301,6 +304,20 @@
     <div class="chart-card">
       <h3>Evolução de leads no CRM ao longo do tempo</h3>
       <div class="chart-wrap"><canvas id="lineChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Projeção de leads no CRM — próximos 3 meses</h3>
+      <p class="proj-sub">Ritmo diário do mês vigente x mês fechado anterior define o % de crescimento, aplicado nos 3 meses seguintes. Respeita o filtro de Shopping, não o de Período.</p>
+      <p class="proj-line" id="projCrmLine"></p>
+      <div class="chart-wrap"><canvas id="projCrmChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Projeção de leads no Portal — próximos 3 meses</h3>
+      <p class="proj-sub">Ritmo diário do mês vigente x mês fechado anterior define o % de crescimento, aplicado nos 3 meses seguintes. Respeita o filtro de Shopping, não o de Período.</p>
+      <p class="proj-line" id="projPortalLine"></p>
+      <div class="chart-wrap"><canvas id="projPortalChart"></canvas></div>
     </div>
 
     <div class="grid" style="grid-template-columns:1fr 1fr;">
@@ -433,7 +450,7 @@ const SHOPPINGS = [
 ];
 
 let state = { config: [], entries: [] };
-let barChart, lineChart;
+let barChart, lineChart, projCrmChart, projPortalChart;
 
 // ---------- BACKEND: Firebase Firestore (tempo real, sem cold start, sem cache) ----------
 const firebaseConfig = {
@@ -700,6 +717,7 @@ function renderDashboard(){
 
   renderBarChart(rows);
   renderLineChart();
+  renderProjections(shoppingId);
   renderRankings(rows);
 }
 
@@ -733,6 +751,103 @@ function renderBarChart(rows){
       }
     }
   });
+}
+
+function monthShortLabel(m){
+  const [,mo] = m.split('-');
+  const names=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return names[parseInt(mo,10)-1];
+}
+function daysInMonth(y, m){ return new Date(y, m, 0).getDate(); } // m = 1..12
+function shiftMonthKey(m, delta){
+  let [y, mo] = m.split('-').map(Number);
+  mo += delta;
+  while(mo > 12){ mo -= 12; y += 1; }
+  while(mo < 1){ mo += 12; y -= 1; }
+  return `${y}-${String(mo).padStart(2,'0')}`;
+}
+
+function computeProjection(metricKey, shoppingId){
+  const today = new Date();
+  const currentMonth = today.toISOString().slice(0,7);
+  const prevMonth = shiftMonthKey(currentMonth, -1);
+  const [cy, cm] = currentMonth.split('-').map(Number);
+  const todayISO = today.toISOString().slice(0,10);
+  const daysElapsed = today.getDate();
+  const totalDaysCurrent = daysInMonth(cy, cm);
+
+  const filtered = state.entries.filter(e=> !shoppingId || shoppingId==='all' || e.shoppingId===shoppingId);
+
+  const prevMonthTotal = filtered.filter(e=>monthKey(e.date)===prevMonth).reduce((s,e)=>s+Number(e[metricKey]||0),0);
+  const currentSoFar = filtered.filter(e=>monthKey(e.date)===currentMonth && e.date<=todayISO).reduce((s,e)=>s+Number(e[metricKey]||0),0);
+
+  const dailyRate = daysElapsed>0 ? currentSoFar/daysElapsed : 0;
+  const projectedCurrent = dailyRate * totalDaysCurrent;
+  const growthRate = prevMonthTotal>0 ? (projectedCurrent-prevMonthTotal)/prevMonthTotal : 0;
+
+  const next1 = projectedCurrent * (1+growthRate);
+  const next2 = next1 * (1+growthRate);
+  const next3 = next2 * (1+growthRate);
+
+  const months = [
+    { key: prevMonth, label: monthShortLabel(prevMonth), value: prevMonthTotal, type:'closed' },
+    { key: currentMonth, label: monthShortLabel(currentMonth)+' (proj.)', value: projectedCurrent, type:'proj' },
+    { key: shiftMonthKey(currentMonth,1), label: monthShortLabel(shiftMonthKey(currentMonth,1)), value: next1, type:'proj' },
+    { key: shiftMonthKey(currentMonth,2), label: monthShortLabel(shiftMonthKey(currentMonth,2)), value: next2, type:'proj' },
+    { key: shiftMonthKey(currentMonth,3), label: monthShortLabel(shiftMonthKey(currentMonth,3)), value: next3, type:'proj' },
+  ];
+
+  const summaryText = prevMonthTotal>0
+    ? `Ritmo de ${monthShortLabel(currentMonth)} (dia ${daysElapsed}/${totalDaysCurrent}): <b>${fmtNum(Math.round(currentSoFar))}</b> leads até agora → projeção de <b>${fmtNum(Math.round(projectedCurrent))}</b> no mês fechado (${growthRate>=0?'+':''}${(growthRate*100).toFixed(1)}% vs. ${monthShortLabel(prevMonth)}).`
+    : `Sem lançamentos em ${monthShortLabel(prevMonth)} pra calcular a taxa de crescimento ainda.`;
+
+  return { months, summaryText };
+}
+
+function renderProjectionChart(canvasId, lineElId, metricKey, shoppingId){
+  const { months, summaryText } = computeProjection(metricKey, shoppingId);
+  document.getElementById(lineElId).innerHTML = summaryText;
+
+  const ctx = document.getElementById(canvasId);
+  const labels = months.map(m=>m.label);
+  const closedData = months.map(m=> m.type==='closed' ? Math.round(m.value) : null);
+  const projData = months.map(m=> Math.round(m.value));
+
+  return new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets:[
+      {
+        label:'Histórico (fechado)', data: closedData,
+        borderColor:'#ffd100', backgroundColor:'#ffd100',
+        pointRadius:6, pointHoverRadius:7, pointBackgroundColor:'#0a0a0a', pointBorderColor:'#ffd100', pointBorderWidth:2,
+        showLine:false,
+        datalabels:{ color:'#ffd100', font:{family:'Inter', weight:'bold', size:12}, align:'top', offset:8 }
+      },
+      {
+        label:'Projeção (tendência)', data: projData,
+        borderColor:'#4169E1', backgroundColor:'rgba(65,105,225,.08)',
+        borderDash:[6,4], tension:0, fill:false,
+        pointRadius:4, pointBackgroundColor:'#0a0a0a', pointBorderColor:'#4169E1', pointBorderWidth:2,
+        datalabels:{ color:'#8fa8f0', font:{family:'Inter', weight:'bold', size:11}, align:'top', offset:6,
+          formatter:(value, ctx)=> ctx.dataIndex===0 ? '' : fmtNum(value) }
+      },
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:'#8b93a1', font:{family:'Inter'} } } },
+      scales:{
+        x:{ ticks:{color:'#8b93a1', font:{family:'Inter'}}, grid:{display:false} },
+        y:{ ticks:{color:'#8b93a1', font:{family:'JetBrains Mono'}}, grid:{display:false} }
+      }
+    }
+  });
+}
+
+function renderProjections(shoppingId){
+  if(projCrmChart) projCrmChart.destroy();
+  if(projPortalChart) projPortalChart.destroy();
+  projCrmChart = renderProjectionChart('projCrmChart', 'projCrmLine', 'crmLeads', shoppingId);
+  projPortalChart = renderProjectionChart('projPortalChart', 'projPortalLine', 'portalLeads', shoppingId);
 }
 
 function renderLineChart(){
