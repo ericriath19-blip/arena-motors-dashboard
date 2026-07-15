@@ -842,7 +842,15 @@ function computeProjection(metricKey, shoppingId){
 
   const dailyRate = daysElapsed>0 ? currentSoFar/daysElapsed : 0;
   const projectedCurrent = dailyRate * totalDaysCurrent;
-  const growthRate = prevMonthTotal>0 ? (projectedCurrent-prevMonthTotal)/prevMonthTotal : 0;
+
+  // taxa de crescimento média: mês-a-mês de todo o histórico fechado + a transição pro mês vigente projetado
+  const sequence = [...historicalMonths.map(m=>totalsByMonth[m]), projectedCurrent];
+  const growthRates = [];
+  for(let i=1; i<sequence.length; i++){
+    const prev = sequence[i-1], curr = sequence[i];
+    if(prev > 0) growthRates.push((curr-prev)/prev);
+  }
+  const growthRate = growthRates.length ? growthRates.reduce((s,g)=>s+g,0)/growthRates.length : 0;
 
   const next1 = projectedCurrent * (1+growthRate);
   const next2 = next1 * (1+growthRate);
@@ -856,9 +864,9 @@ function computeProjection(metricKey, shoppingId){
     { key: shiftMonthKey(currentMonth,3), label: monthShortLabel(shiftMonthKey(currentMonth,3)), value: next3, type:'proj' },
   ];
 
-  const summaryText = prevMonthTotal>0
-    ? `Ritmo de ${monthShortLabel(currentMonth)} (dia ${daysElapsed}/${totalDaysCurrent}): <b>${fmtNum(Math.round(currentSoFar))}</b> leads até agora → projeção de <b>${fmtNum(Math.round(projectedCurrent))}</b> no mês fechado (${growthRate>=0?'+':''}${(growthRate*100).toFixed(1)}% vs. ${monthShortLabel(prevMonth)}).`
-    : `Sem lançamentos em ${monthShortLabel(prevMonth)} pra calcular a taxa de crescimento ainda.`;
+  const summaryText = growthRates.length
+    ? `Ritmo de ${monthShortLabel(currentMonth)} (dia ${daysElapsed}/${totalDaysCurrent}): <b>${fmtNum(Math.round(currentSoFar))}</b> leads até agora → projeção de <b>${fmtNum(Math.round(projectedCurrent))}</b> no mês fechado. Taxa média de crescimento (${growthRates.length} transiç${growthRates.length===1?'ão':'ões'} mensal${growthRates.length===1?'':'is'}): <b>${growthRate>=0?'+':''}${(growthRate*100).toFixed(1)}%</b>.`
+    : `Sem histórico suficiente pra calcular a taxa de crescimento ainda.`;
 
   return { months, summaryText };
 }
