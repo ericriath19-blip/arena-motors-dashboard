@@ -713,23 +713,23 @@ function renderDashboard(){
       <div class="sub">de ${fmtNum(totals.portalLeads)} recebidos nos portais${shoppingName ? ' · '+shoppingName : ''}</div>
     </div>
     <div class="summary-card">
+      <div class="label">Leads nos Portais</div>
+      <div class="value">${fmtNum(totals.portalLeads)}</div>
+      <div class="sub">total no período, somando todos os portais</div>
+    </div>
+    <div class="summary-card">
       <div class="label">Custo médio / lead</div>
       <div class="value">${fmtBRL(totals.avgCost)}</div>
     </div>
     <div class="summary-card">
-      <div class="label">Lead não entregue Portais x CRM</div>
+      <div class="label">Portais x CRM</div>
       <div class="value bad">${totals.leakPct.toFixed(1)}%</div>
-      <div class="sub">${fmtBRL(totals.leakLoss)} · prometido não virou lead no CRM</div>
+      <div class="sub">${fmtBRL(totals.leakLoss)} · Recebido pelo Portal mas não entrou no CRM</div>
     </div>
     <div class="summary-card">
       <div class="label">Leads não entregues pelos portais</div>
       <div class="value bad">${totals.promiseGapPct.toFixed(1)}%</div>
       <div class="sub">${fmtBRL(totals.promiseLoss)} · abaixo do prometido pelo portal</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">Leads entregues pelos portais</div>
-      <div class="value">${fmtNum(totals.portalLeads)}</div>
-      <div class="sub">total no período, somando todos os portais</div>
     </div>
   `;
 
