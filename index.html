@@ -396,22 +396,6 @@
           <label>até</label>
           <select id="detMonthEnd"></select>
         </div>
-        <div class="field">
-          <label>Leads no portal (min)</label>
-          <input type="number" id="detPortalMin" min="0" placeholder="0" style="min-width:80px;">
-        </div>
-        <div class="field">
-          <label>Leads no portal (max)</label>
-          <input type="number" id="detPortalMax" min="0" placeholder="—" style="min-width:80px;">
-        </div>
-        <div class="field">
-          <label>Leads no CRM (min)</label>
-          <input type="number" id="detCrmMin" min="0" placeholder="0" style="min-width:80px;">
-        </div>
-        <div class="field">
-          <label>Leads no CRM (max)</label>
-          <input type="number" id="detCrmMax" min="0" placeholder="—" style="min-width:80px;">
-        </div>
         <button type="button" class="ghost" onclick="clearDetailedFilters()">Limpar filtros</button>
       </form>
     </div>
@@ -1071,10 +1055,6 @@ window.clearDetailedFilters = ()=>{
   const months = monthsAvailable().slice().sort();
   document.getElementById('detMonthStart').value = months[0];
   document.getElementById('detMonthEnd').value = months[months.length-1];
-  document.getElementById('detPortalMin').value = '';
-  document.getElementById('detPortalMax').value = '';
-  document.getElementById('detCrmMin').value = '';
-  document.getElementById('detCrmMax').value = '';
   renderDetailedTable();
 };
 
@@ -1083,20 +1063,12 @@ function renderDetailedTable(){
   const portalId = document.getElementById('detPortal').value;
   const start = document.getElementById('detMonthStart').value;
   const end = document.getElementById('detMonthEnd').value;
-  const portalMin = document.getElementById('detPortalMin').value;
-  const portalMax = document.getElementById('detPortalMax').value;
-  const crmMin = document.getElementById('detCrmMin').value;
-  const crmMax = document.getElementById('detCrmMax').value;
 
   let filtered = state.entries.filter(e=>{
     if(shoppingId!=='all' && e.shoppingId!==shoppingId) return false;
     if(portalId!=='all' && e.portalId!==portalId) return false;
     if(start && monthKey(e.date) < start) return false;
     if(end && monthKey(e.date) > end) return false;
-    if(portalMin!=='' && Number(e.portalLeads||0) < Number(portalMin)) return false;
-    if(portalMax!=='' && Number(e.portalLeads||0) > Number(portalMax)) return false;
-    if(crmMin!=='' && Number(e.crmLeads||0) < Number(crmMin)) return false;
-    if(crmMax!=='' && Number(e.crmLeads||0) > Number(crmMax)) return false;
     return true;
   });
   filtered.sort((a,b)=> b.date.localeCompare(a.date));
@@ -1119,7 +1091,7 @@ function renderDetailedTable(){
   }).join('');
 }
 
-['detShopping','detPortal','detMonthStart','detMonthEnd','detPortalMin','detPortalMax','detCrmMin','detCrmMax'].forEach(id=>{
+['detShopping','detPortal','detMonthStart','detMonthEnd'].forEach(id=>{
   document.getElementById(id).addEventListener('input', renderDetailedTable);
   document.getElementById(id).addEventListener('change', renderDetailedTable);
 });
