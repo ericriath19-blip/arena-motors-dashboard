@@ -623,12 +623,12 @@ function computeRangeStats(start, end, shoppingId){
     });
     const portalLeads = es.reduce((s,e)=>s+Number(e.portalLeads||0),0);
     const crmLeads = es.reduce((s,e)=>s+Number(e.crmLeads||0),0);
-    const leaked = Math.max(portalLeads - crmLeads, 0);
-    const leakPct = portalLeads>0 ? (leaked/portalLeads*100) : 0;
     const feeTotal = Number(p.fee||0) * numMonths;
     const promisedTotal = Number(p.promised||0) * numMonths;
+    const leaked = Math.max(promisedTotal - crmLeads, 0);
+    const leakPct = promisedTotal>0 ? (leaked/promisedTotal*100) : 0;
     const costPerLead = crmLeads>0 ? (feeTotal/crmLeads) : null;
-    const leakLoss = feeTotal>0 && portalLeads>0 ? feeTotal*(leaked/portalLeads) : 0;
+    const leakLoss = feeTotal>0 && promisedTotal>0 ? feeTotal*(leaked/promisedTotal) : 0;
     const promiseFulfillPct = promisedTotal>0 ? Math.min((portalLeads/promisedTotal)*100, 999) : null;
     const promiseLoss = (feeTotal>0 && promisedTotal>0 && portalLeads<promisedTotal) ? feeTotal*(1-(portalLeads/promisedTotal)) : 0;
     return {portal:p, portalLeads, crmLeads, leaked, leakPct, costPerLead, leakLoss, promiseFulfillPct, promiseLoss, feeTotal, promisedTotal};
