@@ -627,11 +627,12 @@ function computeRangeStats(start, end, shoppingId){
     const promisedTotal = Number(p.promised||0) * numMonths;
     const leaked = Math.max(promisedTotal - crmLeads, 0);
     const leakPct = promisedTotal>0 ? (leaked/promisedTotal*100) : 0;
+    const leakedPortalCrm = Math.max(portalLeads - crmLeads, 0);
     const costPerLead = crmLeads>0 ? (feeTotal/crmLeads) : null;
     const leakLoss = feeTotal>0 && promisedTotal>0 ? feeTotal*(leaked/promisedTotal) : 0;
     const promiseFulfillPct = promisedTotal>0 ? Math.min((portalLeads/promisedTotal)*100, 999) : null;
     const promiseLoss = (feeTotal>0 && promisedTotal>0 && portalLeads<promisedTotal) ? feeTotal*(1-(portalLeads/promisedTotal)) : 0;
-    return {portal:p, portalLeads, crmLeads, leaked, leakPct, costPerLead, leakLoss, promiseFulfillPct, promiseLoss, feeTotal, promisedTotal};
+    return {portal:p, portalLeads, crmLeads, leaked, leakPct, leakedPortalCrm, costPerLead, leakLoss, promiseFulfillPct, promiseLoss, feeTotal, promisedTotal};
   });
   rows.sort((a,b)=>{
     const ia = PORTAL_ORDER.indexOf(a.portal.id); const ib = PORTAL_ORDER.indexOf(b.portal.id);
@@ -752,12 +753,12 @@ function renderDashboard(){
         <div class="pc-stats">
           <div class="stat-row"><span class="k">Leads no portal</span><span class="v">${fmtNum(r.portalLeads)}</span></div>
           <div class="stat-row"><span class="k">Leads no CRM</span><span class="v">${fmtNum(r.crmLeads)}</span></div>
-          <div class="stat-row"><span class="k">Leads perdidos</span><span class="v">${fmtNum(r.leaked)}</span></div>
+          <div class="stat-row"><span class="k">Leads perdidos</span><span class="v">${fmtNum(r.leakedPortalCrm)}</span></div>
         </div>
       </div>
       <div class="pc-fin">
         <div class="fin-item"><div class="k">Custo / lead</div><div class="v">${r.costPerLead!==null ? fmtBRL(r.costPerLead) : '—'}</div></div>
-        <div class="fin-item"><div class="k">R$ em vazamento</div><div class="v">${fmtBRL(r.leakLoss)}</div></div>
+        <div class="fin-item"><div class="k">Entregue x Prometido - Leads</div><div class="v">${fmtNum(r.portalLeads)} x ${r.promisedTotal>0 ? fmtNum(r.promisedTotal) : '—'}</div></div>
         <div class="fin-item"><div class="k">Prometido (período)</div><div class="v">${r.promisedTotal>0 ? fmtNum(r.promisedTotal) : '—'}</div></div>
         <div class="fin-item"><div class="k">Entregue vs prometido</div><div class="v">${r.promiseFulfillPct!==null ? r.promiseFulfillPct.toFixed(0)+'%' : '—'}</div></div>
       </div>
