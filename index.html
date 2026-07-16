@@ -598,6 +598,19 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 // ---------- HELPERS ----------
 function monthKey(dateStr){ return dateStr ? dateStr.slice(0,7) : null; }
 
+// Cada lançamento novo é uma ATUALIZAÇÃO do mês (não soma) — mesma lógica do RAI.
+// Pra cada combinação shopping+portal+mês, usa só o lançamento de data mais recente.
+function getEffectiveEntries(){
+  const latest = {};
+  state.entries.forEach(e=>{
+    const key = `${e.shoppingId}|${e.portalId}|${monthKey(e.date)}`;
+    if(!latest[key] || e.date > latest[key].date){
+      latest[key] = e;
+    }
+  });
+  return Object.values(latest);
+}
+
 function monthsAvailable(){
   const set = new Set(state.entries.map(e=>monthKey(e.date)));
   const now = new Date();
@@ -614,8 +627,9 @@ function monthsBetween(start, end){
 
 function computeRangeStats(start, end, shoppingId){
   const numMonths = monthsBetween(start, end);
+  const effectiveEntries = getEffectiveEntries();
   const rows = state.config.map(p=>{
-    const es = state.entries.filter(e=>{
+    const es = effectiveEntries.filter(e=>{
       if(e.portalId!==p.id) return false;
       if(monthKey(e.date)<start || monthKey(e.date)>end) return false;
       if(shoppingId && shoppingId!=='all' && e.shoppingId!==shoppingId) return false;
@@ -822,11 +836,9 @@ function computeProjection(metricKey, shoppingId){
   const currentMonth = today.toISOString().slice(0,7);
   const prevMonth = shiftMonthKey(currentMonth, -1);
   const [cy, cm] = currentMonth.split('-').map(Number);
-  const todayISO = today.toISOString().slice(0,10);
-  const daysElapsed = today.getDate();
   const totalDaysCurrent = daysInMonth(cy, cm);
 
-  const filtered = state.entries.filter(e=> !shoppingId || shoppingId==='all' || e.shoppingId===shoppingId);
+  const filtered = getEffectiveEntries().filter(e=> !shoppingId || shoppingId==='all' || e.shoppingId===shoppingId);
 
   // todos os meses fechados com dado, em ordem cronológica (não só o mês anterior)
   const historicalMonths = Array.from(new Set(filtered.map(e=>monthKey(e.date))))
@@ -839,7 +851,16 @@ function computeProjection(metricKey, shoppingId){
   });
 
   const prevMonthTotal = totalsByMonth[prevMonth] || 0;
-  const currentSoFar = filtered.filter(e=>monthKey(e.date)===currentMonth && e.date<=todayISO).reduce((s,e)=>s+Number(e[metricKey]||0),0);
+  const currentMonthEntries = filtered.filter(e=>monthKey(e.date)===currentMonth);
+  const currentSoFar = currentMonthEntries.reduce((s,e)=>s+Number(e[metricKey]||0),0);
+
+  // dias decorridos = até a data do lançamento mais recente do mês vigente (não necessariamente hoje,
+  // já que o dado pode ter sido atualizado pela última vez há alguns dias)
+  let daysElapsed = today.getDate();
+  if(currentMonthEntries.length){
+    const mostRecentDate = currentMonthEntries.reduce((max,e)=> e.date>max ? e.date : max, currentMonthEntries[0].date);
+    daysElapsed = Number(mostRecentDate.slice(8,10));
+  }
 
   const dailyRate = daysElapsed>0 ? currentSoFar/daysElapsed : 0;
   const projectedCurrent = dailyRate * totalDaysCurrent;
@@ -933,9 +954,10 @@ function renderProjections(shoppingId){
 
 function renderLineChart(){
   const ctx = document.getElementById('lineChart');
-  const months = Array.from(new Set(state.entries.map(e=>monthKey(e.date)))).sort();
-  const crmByMonth = months.map(m=> state.entries.filter(e=>monthKey(e.date)===m).reduce((s,e)=>s+Number(e.crmLeads||0),0));
-  const portalByMonth = months.map(m=> state.entries.filter(e=>monthKey(e.date)===m).reduce((s,e)=>s+Number(e.portalLeads||0),0));
+  const effectiveEntries = getEffectiveEntries();
+  const months = Array.from(new Set(effectiveEntries.map(e=>monthKey(e.date)))).sort();
+  const crmByMonth = months.map(m=> effectiveEntries.filter(e=>monthKey(e.date)===m).reduce((s,e)=>s+Number(e.crmLeads||0),0));
+  const portalByMonth = months.map(m=> effectiveEntries.filter(e=>monthKey(e.date)===m).reduce((s,e)=>s+Number(e.portalLeads||0),0));
   if(lineChart) lineChart.destroy();
   lineChart = new Chart(ctx, {
     type:'line',
