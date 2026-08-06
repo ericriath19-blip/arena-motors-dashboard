@@ -331,6 +331,17 @@
         <div class="rank-list" id="rankPromise"></div>
       </div>
     </div>
+
+    <div class="grid" style="grid-template-columns:1fr 1fr;">
+      <div class="panel">
+        <h3>Ranking · leads no portal (maior para menor)</h3>
+        <div class="rank-list" id="rankPortalLeads"></div>
+      </div>
+      <div class="panel">
+        <h3>Ranking · leads no CRM (maior para menor)</h3>
+        <div class="rank-list" id="rankCrmLeads"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ENTRIES TAB -->
@@ -1064,6 +1075,24 @@ function renderRankings(rows){
       <span class="rval">${r.promiseFulfillPct.toFixed(0)}%</span>
     </div>`;
   }).join('') : `<div class="empty-state">Cadastre "leads prometidos" nos portais para ver este ranking.</div>`;
+
+  const byPortalLeads = [...rows].filter(r=>r.portalLeads>0).sort((a,b)=>b.portalLeads-a.portalLeads);
+  document.getElementById('rankPortalLeads').innerHTML = byPortalLeads.length ? byPortalLeads.map((r,i)=>`
+    <div class="rank-row">
+      <span class="rn">${i+1}</span>
+      <span class="rname">${r.portal.name}</span>
+      <div class="rbar-wrap"><div class="rbar" style="width:${Math.min((r.portalLeads/(byPortalLeads[0].portalLeads||1))*100,100)}%; background:#ffd100;"></div></div>
+      <span class="rval">${fmtNum(r.portalLeads)}</span>
+    </div>`).join('') : `<div class="empty-state">Sem dados suficientes no mês selecionado.</div>`;
+
+  const byCrmLeads = [...rows].filter(r=>r.crmLeads>0).sort((a,b)=>b.crmLeads-a.crmLeads);
+  document.getElementById('rankCrmLeads').innerHTML = byCrmLeads.length ? byCrmLeads.map((r,i)=>`
+    <div class="rank-row">
+      <span class="rn">${i+1}</span>
+      <span class="rname">${r.portal.name}</span>
+      <div class="rbar-wrap"><div class="rbar" style="width:${Math.min((r.crmLeads/(byCrmLeads[0].crmLeads||1))*100,100)}%; background:#3ddc97;"></div></div>
+      <span class="rval">${fmtNum(r.crmLeads)}</span>
+    </div>`).join('') : `<div class="empty-state">Sem dados suficientes no mês selecionado.</div>`;
 }
 
 // ---------- RENDER: ENTRIES ----------
