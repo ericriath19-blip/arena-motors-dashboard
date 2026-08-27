@@ -447,17 +447,18 @@
 
     <div class="panel">
       <h3>Mensalidade e meta de leads por shopping</h3>
-      <p style="font-size:12.5px; color:var(--text-muted); line-height:1.6; margin-bottom:14px;">Cada portal pode ter um valor de contrato e uma meta de leads diferente por shopping. Isso faz o "custo por lead" ficar correto quando você filtra por um shopping específico.</p>
+      <p style="font-size:12.5px; color:var(--text-muted); line-height:1.6; margin-bottom:14px;">Cada portal pode ter um valor de contrato e uma meta de leads diferente por shopping — e o histórico de mudanças fica guardado, então relatórios de meses antigos continuam mostrando o valor que valia na época.</p>
       <table>
         <thead>
-          <tr><th>Portal</th><th>Shopping</th><th>Mensalidade (R$)</th><th>Leads prometidos/mês</th><th></th></tr>
+          <tr><th>Portal</th><th>Shopping</th><th>Válido a partir de</th><th>Mensalidade (R$)</th><th>Leads prometidos/mês</th><th></th></tr>
         </thead>
         <tbody id="portalFeesBody"></tbody>
       </table>
       <div class="empty-state" id="portalFeesEmpty" style="display:none;">Nenhum valor cadastrado ainda.</div>
     </div>
     <div class="panel">
-      <h3>Cadastrar valor por shopping</h3>
+      <h3>Cadastrar / alterar valor por shopping</h3>
+      <p style="font-size:12.5px; color:var(--text-muted); line-height:1.6; margin-bottom:14px;">Pra encerrar uma parceria (ex: portal não é mais parceiro), cadastra um novo valor com mensalidade e prometido em 0, a partir do mês em que isso passou a valer — os meses anteriores continuam com o valor real que existia na época.</p>
       <form class="inline-form" id="portalFeeForm">
         <div class="field">
           <label>Portal</label>
@@ -466,6 +467,10 @@
         <div class="field">
           <label>Shopping</label>
           <select id="pfShopping" required></select>
+        </div>
+        <div class="field">
+          <label>Válido a partir de</label>
+          <input type="month" id="pfValidFrom" required>
         </div>
         <div class="field">
           <label>Mensalidade (R$)</label>
@@ -555,16 +560,49 @@ function normalizeEntryRow(e){
 function normalizePortalFeeRow(f){
   return {
     portalId: String(f.portalId), shoppingId: String(f.shoppingId),
+    validFrom: String(f.validFrom || '2000-01'),
     fee: Number(f.fee||0), promised: Number(f.promised||0)
   };
 }
-function portalFeeDocId(portalId, shoppingId){ return `${portalId}__${shoppingId}`; }
-function getPortalFeeTotals(portalId, shoppingId){
-  const relevant = state.portalFees.filter(f=> f.portalId===portalId && (!shoppingId || shoppingId==='all' || f.shoppingId===shoppingId));
-  return {
-    fee: relevant.reduce((s,f)=>s+Number(f.fee||0),0),
-    promised: relevant.reduce((s,f)=>s+Number(f.promised||0),0),
-  };
+function portalFeeDocId(portalId, shoppingId, validFrom){ return `${portalId}__${shoppingId}__${validFrom}`; }
+
+// Pega o valor vigente de um portal+shopping pra um mês específico (respeita histórico de mudanças)
+function getPortalFeeForMonth(portalId, shoppingId, month){
+  const shoppingsToCheck = (!shoppingId || shoppingId==='all') ? SHOPPINGS.map(s=>s.id) : [shoppingId];
+  let fee = 0, promised = 0;
+  shoppingsToCheck.forEach(sid=>{
+    const candidates = state.portalFees.filter(f=> f.portalId===portalId && f.shoppingId===sid && f.validFrom<=month);
+    if(candidates.length){
+      candidates.sort((a,b)=> b.validFrom.localeCompare(a.validFrom));
+      fee += Number(candidates[0].fee||0);
+      promised += Number(candidates[0].promised||0);
+    }
+  });
+  return {fee, promised};
+}
+
+function monthsInRangeList(start, end){
+  const months = [];
+  let cur = start;
+  let guard = 0;
+  while(cur <= end && guard < 240){
+    months.push(cur);
+    cur = shiftMonthKey(cur, 1);
+    guard++;
+  }
+  return months;
+}
+
+// Soma o valor vigente mês a mês (respeita mudanças de valor ao longo do período, em vez de taxa fixa x meses)
+function getPortalFeeTotals(portalId, shoppingId, start, end){
+  const months = monthsInRangeList(start, end);
+  let fee = 0, promised = 0;
+  months.forEach(m=>{
+    const v = getPortalFeeForMonth(portalId, shoppingId, m);
+    fee += v.fee;
+    promised += v.promised;
+  });
+  return {fee, promised};
 }
 
 let _liveListenersStarted = false;
@@ -639,11 +677,11 @@ async function fbDeleteConfigItem(id){
   catch(e){ showFatalError('Erro ao remover portal: ' + e.message); }
 }
 async function fbSavePortalFee(row){
-  try{ await portalFeesCol.doc(portalFeeDocId(row.portalId, row.shoppingId)).set(row); }
+  try{ await portalFeesCol.doc(portalFeeDocId(row.portalId, row.shoppingId, row.validFrom)).set(row); }
   catch(e){ showFatalError('Erro ao salvar valor por shopping: ' + e.message); }
 }
-async function fbDeletePortalFee(portalId, shoppingId){
-  try{ await portalFeesCol.doc(portalFeeDocId(portalId, shoppingId)).delete(); }
+async function fbDeletePortalFee(portalId, shoppingId, validFrom){
+  try{ await portalFeesCol.doc(portalFeeDocId(portalId, shoppingId, validFrom)).delete(); }
   catch(e){ showFatalError('Erro ao remover valor por shopping: ' + e.message); }
 }
 async function fbSaveEntry(entry){
@@ -707,9 +745,9 @@ function computeRangeStats(start, end, shoppingId){
     });
     const portalLeads = es.reduce((s,e)=>s+Number(e.portalLeads||0),0);
     const crmLeads = es.reduce((s,e)=>s+Number(e.crmLeads||0),0);
-    const feeValues = getPortalFeeTotals(p.id, shoppingId);
-    const feeTotal = feeValues.fee * numMonths;
-    const promisedTotal = feeValues.promised * numMonths;
+    const feeValues = getPortalFeeTotals(p.id, shoppingId, start, end);
+    const feeTotal = feeValues.fee;
+    const promisedTotal = feeValues.promised;
     const leaked = Math.max(promisedTotal - crmLeads, 0);
     const leakPct = promisedTotal>0 ? (leaked/promisedTotal*100) : 0;
     const leakedPortalCrm = Math.max(portalLeads - crmLeads, 0);
@@ -1312,7 +1350,8 @@ function renderPortalFeesTable(){
   const rows = state.portalFees.slice().sort((a,b)=>{
     const pa = PORTAL_ORDER.indexOf(a.portalId), pb = PORTAL_ORDER.indexOf(b.portalId);
     if(pa!==pb) return (pa===-1?999:pa)-(pb===-1?999:pb);
-    return a.shoppingId.localeCompare(b.shoppingId);
+    if(a.shoppingId!==b.shoppingId) return a.shoppingId.localeCompare(b.shoppingId);
+    return b.validFrom.localeCompare(a.validFrom); // mais recente primeiro
   });
   document.getElementById('portalFeesEmpty').style.display = rows.length ? 'none' : 'block';
   body.innerHTML = rows.map(f=>{
@@ -1321,29 +1360,31 @@ function renderPortalFeesTable(){
     return `<tr>
       <td class="name">${portal ? portal.name : f.portalId}</td>
       <td class="name">${shopping ? shopping.name : f.shoppingId}</td>
-      <td><input type="number" min="0" step="0.01" value="${f.fee}" onchange="updatePortalFee('${f.portalId}','${f.shoppingId}','fee',this.value)"></td>
-      <td><input type="number" min="0" value="${f.promised}" onchange="updatePortalFee('${f.portalId}','${f.shoppingId}','promised',this.value)"></td>
-      <td><button class="ghost" onclick="removePortalFee('${f.portalId}','${f.shoppingId}')">Remover</button></td>
+      <td>${formatMonthLabel(f.validFrom)}</td>
+      <td><input type="number" min="0" step="0.01" value="${f.fee}" onchange="updatePortalFee('${f.portalId}','${f.shoppingId}','${f.validFrom}','fee',this.value)"></td>
+      <td><input type="number" min="0" value="${f.promised}" onchange="updatePortalFee('${f.portalId}','${f.shoppingId}','${f.validFrom}','promised',this.value)"></td>
+      <td><button class="ghost" onclick="removePortalFee('${f.portalId}','${f.shoppingId}','${f.validFrom}')">Remover</button></td>
     </tr>`;
   }).join('');
 }
 
-window.updatePortalFee = async (portalId, shoppingId, field, value)=>{
-  const existing = state.portalFees.find(f=>f.portalId===portalId && f.shoppingId===shoppingId) || { portalId, shoppingId, fee:0, promised:0 };
+window.updatePortalFee = async (portalId, shoppingId, validFrom, field, value)=>{
+  const existing = state.portalFees.find(f=>f.portalId===portalId && f.shoppingId===shoppingId && f.validFrom===validFrom) || { portalId, shoppingId, validFrom, fee:0, promised:0 };
   const updated = { ...existing, [field]: Number(value||0) };
   await fbSavePortalFee(updated);
 };
-window.removePortalFee = async (portalId, shoppingId)=>{
-  await fbDeletePortalFee(portalId, shoppingId);
+window.removePortalFee = async (portalId, shoppingId, validFrom)=>{
+  await fbDeletePortalFee(portalId, shoppingId, validFrom);
 };
 
 document.getElementById('portalFeeForm').addEventListener('submit', async (ev)=>{
   ev.preventDefault();
   const portalId = document.getElementById('pfPortal').value;
   const shoppingId = document.getElementById('pfShopping').value;
-  if(!portalId || !shoppingId) return;
+  const validFrom = document.getElementById('pfValidFrom').value;
+  if(!portalId || !shoppingId || !validFrom) return;
   const row = {
-    portalId, shoppingId,
+    portalId, shoppingId, validFrom,
     fee: Number(document.getElementById('pfFee').value||0),
     promised: Number(document.getElementById('pfPromised').value||0),
   };
