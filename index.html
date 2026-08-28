@@ -1368,8 +1368,8 @@ function renderPortalFeesTable(){
     return `<tr>
       <td class="name">${portal ? portal.name : f.portalId}</td>
       <td class="name">${shopping ? shopping.name : f.shoppingId}</td>
-      <td>${formatMonthLabel(f.validFrom)}</td>
-      <td>${f.validTo ? formatMonthLabel(f.validTo) : 'atual'}</td>
+      <td><input type="month" value="${f.validFrom}" onchange="updatePortalFeeValidFrom('${f.portalId}','${f.shoppingId}','${f.validFrom}',this.value)"></td>
+      <td><input type="month" value="${f.validTo||''}" onchange="updatePortalFeeValidTo('${f.portalId}','${f.shoppingId}','${f.validFrom}',this.value)" placeholder="atual"></td>
       <td><input type="number" min="0" step="0.01" value="${f.fee}" onchange="updatePortalFee('${f.portalId}','${f.shoppingId}','${f.validFrom}','fee',this.value)"></td>
       <td><input type="number" min="0" value="${f.promised}" onchange="updatePortalFee('${f.portalId}','${f.shoppingId}','${f.validFrom}','promised',this.value)"></td>
       <td><button class="ghost" onclick="removePortalFee('${f.portalId}','${f.shoppingId}','${f.validFrom}')">Remover</button></td>
@@ -1381,6 +1381,33 @@ window.updatePortalFee = async (portalId, shoppingId, validFrom, field, value)=>
   const existing = state.portalFees.find(f=>f.portalId===portalId && f.shoppingId===shoppingId && f.validFrom===validFrom) || { portalId, shoppingId, validFrom, validTo:null, fee:0, promised:0 };
   const updated = { ...existing, [field]: Number(value||0) };
   await fbSavePortalFee(updated);
+};
+
+window.updatePortalFeeValidTo = async (portalId, shoppingId, validFrom, value)=>{
+  const existing = state.portalFees.find(f=>f.portalId===portalId && f.shoppingId===shoppingId && f.validFrom===validFrom);
+  if(!existing) return;
+  if(value && value < validFrom){
+    showFatalError('A data "Até" não pode ser antes da data "De".');
+    return;
+  }
+  const updated = { ...existing, validTo: value || null };
+  await fbSavePortalFee(updated);
+};
+
+window.updatePortalFeeValidFrom = async (portalId, shoppingId, oldValidFrom, newValidFrom)=>{
+  if(!newValidFrom || newValidFrom === oldValidFrom) return;
+  const existing = state.portalFees.find(f=>f.portalId===portalId && f.shoppingId===shoppingId && f.validFrom===oldValidFrom);
+  if(!existing) return;
+  const collision = state.portalFees.find(f=>f.portalId===portalId && f.shoppingId===shoppingId && f.validFrom===newValidFrom);
+  if(collision){
+    showFatalError(`Já existe um valor cadastrado pra esse portal/shopping começando em ${formatMonthLabel(newValidFrom)}. Apague um dos dois antes de mudar a data.`);
+    renderPortalFeesTable(); // desfaz visualmente o valor digitado no input
+    return;
+  }
+  // move o registro pra nova chave: cria novo, apaga o antigo
+  const moved = { ...existing, validFrom: newValidFrom };
+  await fbSavePortalFee(moved);
+  await fbDeletePortalFee(portalId, shoppingId, oldValidFrom);
 };
 window.removePortalFee = async (portalId, shoppingId, validFrom)=>{
   await fbDeletePortalFee(portalId, shoppingId, validFrom);
