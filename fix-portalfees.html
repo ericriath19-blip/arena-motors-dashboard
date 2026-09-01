@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Diagnóstico/Correção - Valores por Shopping</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<style>
+  body{ background:#0a0a0a; color:#f5f5f0; font-family:monospace; padding:24px; max-width:900px; margin:0 auto; }
+  h1{ font-size:18px; margin-bottom:16px; }
+  button{ background:#ffd100; color:#0a0a0a; border:none; padding:12px 20px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px; margin-right:8px;}
+  button:disabled{ opacity:0.5; cursor:not-allowed; }
+  #log{ margin-top:20px; background:#141414; border:1px solid #2c2c2c; border-radius:8px; padding:16px; white-space:pre-wrap; font-size:13px; line-height:1.6; max-height:600px; overflow:auto; }
+  .ok{ color:#3ddc97; }
+  .err{ color:#ff6b4a; }
+  .warn{ color:#ffe066; }
+</style>
+</head>
+<body>
+<h1>🔍 Diagnóstico: valores por shopping (IDs antigos)</h1>
+<button id="btnDiag">1. Diagnosticar</button>
+<button id="btnFix" disabled>2. Corrigir</button>
+<div id="log"></div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyADj6CWOUh66_G7qMoFmLxzorSRmwzhG3Q",
+  authDomain: "arena-motors-dashboard.firebaseapp.com",
+  projectId: "arena-motors-dashboard",
+  storageBucket: "arena-motors-dashboard.firebasestorage.app",
+  messagingSenderId: "668179364218",
+  appId: "1:668179364218:web:7fc08915222efb30c13ec3"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const logEl = document.getElementById('log');
+function log(msg, cls=''){
+  const line = document.createElement('div');
+  if(cls) line.className = cls;
+  line.textContent = msg;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+async function ensureAuth(){
+  await new Promise((resolve, reject)=>{
+    const t = setTimeout(()=>reject(new Error('timeout na autenticação')), 15000);
+    firebase.auth().onAuthStateChanged(u=>{ if(u){ clearTimeout(t); resolve(); } });
+    firebase.auth().signInAnonymously().catch(reject);
+  });
+}
+
+function expectedDocId(data){
+  const validFrom = data.validFrom || '2000-01';
+  return `${data.portalId}__${data.shoppingId}__${validFrom}`;
+}
+
+let fixPlan = [];
+
+document.getElementById('btnDiag').addEventListener('click', async ()=>{
+  logEl.innerHTML = '';
+  document.getElementById('btnDiag').disabled = true;
+  fixPlan = [];
+  try{
+    log('Autenticando...');
+    await ensureAuth();
+    log('Autenticado.', 'ok');
+
+    log('Lendo todos os documentos de "portalFees"...');
+    const snap = await db.collection('portalFees').get();
+    log(`Total de documentos: ${snap.docs.length}`, 'ok');
+    log('');
+
+    snap.docs.forEach(d=>{
+      const data = d.data();
+      const expected = expectedDocId(data);
+      const status = d.id === expected ? 'OK' : 'PRECISA CORRIGIR';
+      log(`doc.id="${d.id}"  portal=${data.portalId}  shopping=${data.shoppingId}  validFrom=${data.validFrom||'(vazio)'}  fee=${data.fee}  promised=${data.promised}  [${status}]`, status==='OK'?'':'warn');
+      if(d.id !== expected){
+        fixPlan.push({ oldId: d.id, expectedId: expected, data });
+      }
+    });
+
+    log('');
+    if(fixPlan.length){
+      log(`${fixPlan.length} documento(s) com ID desatualizado. Corrigível.`, 'warn');
+      document.getElementById('btnFix').disabled = false;
+    } else {
+      log('Nenhum problema encontrado.', 'ok');
+    }
+  }catch(err){
+    log('ERRO: ' + err.message, 'err');
+  }
+  document.getElementById('btnDiag').disabled = false;
+});
+
+document.getElementById('btnFix').addEventListener('click', async ()=>{
+  document.getElementById('btnFix').disabled = true;
+  try{
+    for(const item of fixPlan){
+      log('');
+      const validFrom = item.data.validFrom || '2000-01';
+      const fixedData = { ...item.data, validFrom, validTo: item.data.validTo || null };
+      log(`Criando doc correto id="${item.expectedId}"...`);
+      await db.collection('portalFees').doc(item.expectedId).set(fixedData);
+      log('Gravado.', 'ok');
+      log(`Apagando doc antigo id="${item.oldId}"...`);
+      await db.collection('portalFees').doc(item.oldId).delete();
+      log('Apagado.', 'ok');
+    }
+    log('');
+    log('✅ CORREÇÃO CONCLUÍDA. Volta pro painel e testa editar de novo.', 'ok');
+  }catch(err){
+    log('ERRO: ' + err.message, 'err');
+    document.getElementById('btnFix').disabled = false;
+  }
+});
+</script>
+</body>
+</html>
